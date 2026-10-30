@@ -32,6 +32,8 @@ sssingbox node rm <id/端口/名字>
 sssingbox node on|off <id/端口/名字>
 sssingbox status        # 面板状态
 sssingbox sub           # 订阅链接
+sssingbox core list     # 内核现状：装没装、什么版本、有没有更新
+sssingbox core install sing-box   # 装内核，没装就是安装，装了就是更新到最新版
 sssingbox admin reset   # 重置管理员密码
 ```
 

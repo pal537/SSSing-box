@@ -28,7 +28,7 @@ func main() {
 	// 第一个参数是不带 - 的子命令名时走 CLI，不启动面板。
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
-		case "menu", "node", "status", "sub", "login", "admin", "version":
+		case "menu", "node", "status", "sub", "login", "admin", "version", "core":
 			os.Exit(cli.Run(os.Args[1:]))
 		}
 	}

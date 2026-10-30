@@ -63,9 +63,12 @@ func saveCredentials(dataDir string, c credentials) error {
 
 // client：带登录态的面板 API 客户端。先试 HTTP（双协议监听下本地 HTTP 一直通），
 // 不通再试 HTTPS（忽略自签证书校验，只走本机回环）。
+// Username/Password 留给菜单“查看登录信息”用，只显示在用户自己的终端上。
 type client struct {
-	base string
-	http *http.Client
+	base     string
+	http     *http.Client
+	username string
+	password string
 }
 
 func newClient(o options) (*client, error) {
@@ -94,7 +97,7 @@ func newClient(o options) (*client, error) {
 		_ = json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if out.OK {
-			return &client{base: base, http: hc}, nil
+			return &client{base: base, http: hc, username: cred.Username, password: cred.Password}, nil
 		}
 		return nil, fmt.Errorf("面板登录失败：%s（账号密码不对，或凭证文件已过期，跑 sssingbox login 重新保存）", out.Error)
 	}

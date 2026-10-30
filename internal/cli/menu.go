@@ -62,6 +62,8 @@ func runMenu(o options) int {
 		fmt.Println("4. 启用/停用节点")
 		fmt.Println("5. 面板状态")
 		fmt.Println("6. 订阅链接")
+		fmt.Println("7. 安装/更新内核")
+		fmt.Println("8. 查看登录信息")
 		fmt.Println("0. 退出")
 		switch prompt("请选择：") {
 		case "1":
@@ -76,6 +78,10 @@ func runMenu(o options) int {
 			menuStatus(c)
 		case "6":
 			menuSub(c)
+		case "7":
+			menuCore(c)
+		case "8":
+			menuLogin(c)
 		case "0":
 			return 0
 		default:
@@ -194,6 +200,80 @@ func menuSub(c *client) {
 		return
 	}
 	fmt.Printf("http://%v:%v/sub/%s\n", st["public_ip"], st["panel_port"], tok)
+}
+
+// menuCore：安装/更新内核。先列出内核现状，再让用户选一个装最新版
+// （版本留空=最新版，没装就是安装，装了就是更新；MTProto 不提供更新，
+// 老 CPU 机器钉死编译版时后端会直接说明，不会偷偷覆盖）。
+func menuCore(c *client) {
+	env, err := c.call("GET", "/api/cores", nil)
+	if err != nil {
+		fmt.Println("错误：", err)
+		return
+	}
+	arr, _ := env["data"].([]interface{})
+	if len(arr) == 0 {
+		fmt.Println("没有内核信息")
+		return
+	}
+	type coreRow struct {
+		name, title, state string
+	}
+	var rows []coreRow
+	for _, item := range arr {
+		row, _ := item.(map[string]interface{})
+		if row == nil {
+			continue
+		}
+		name, _ := row["name"].(string)
+		title, _ := row["title"].(string)
+		if title == "" {
+			title = name
+		}
+		state := "未安装"
+		if installed, _ := row["installed"].(bool); installed {
+			state = fmt.Sprintf("已安装 %v", row["version"])
+			if latest, _ := row["latest"].(string); latest != "" && latest != row["version"] {
+				state += fmt.Sprintf("（最新 %s）", latest)
+			}
+		}
+		if noUpdate, _ := row["no_update"].(bool); noUpdate {
+			state += "（不更新）"
+			if note, _ := row["note"].(string); note != "" {
+				state += "：" + note
+			}
+		}
+		rows = append(rows, coreRow{name: name, title: title, state: state})
+	}
+	fmt.Println()
+	for i, r := range rows {
+		fmt.Printf("%d. %s：%s\n", i+1, r.title, r.state)
+	}
+	fmt.Println("0. 返回")
+	i := promptInt("选一个安装/更新（0 取消）：", 0)
+	if i < 1 || i > len(rows) {
+		return
+	}
+	name := rows[i-1].name
+	fmt.Printf("正在安装 %s 内核（最新版）…\n", name)
+	data, err := c.call("POST", "/api/cores/"+name+"/install", map[string]interface{}{"version": ""})
+	if err != nil {
+		fmt.Println("安装失败：", err)
+		return
+	}
+	fmt.Printf("已安装 %s %v\n", name, data["version"])
+}
+
+// menuLogin：查看登录信息。地址、账号、密码只显示在用户自己的终端上，
+// 凭证来自 CLI 登录用的那份（安装器生成或 sssingbox login 保存的）。
+func menuLogin(c *client) {
+	st, err := c.settings()
+	if err != nil {
+		fmt.Println("错误：", err)
+		return
+	}
+	fmt.Printf("面板地址：http://%v:%v/\n账号：%s\n密码：%s\n",
+		st["public_ip"], st["panel_port"], c.username, c.password)
 }
 
 var protocols = []struct {
