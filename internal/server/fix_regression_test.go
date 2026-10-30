@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"testing"
 
-	"yizhan/internal/proxy"
-	"yizhan/internal/store"
+	"sssingbox/internal/proxy"
+	"sssingbox/internal/store"
 )
 
 func TestInboundListensV6(t *testing.T) {

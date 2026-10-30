@@ -1,4 +1,4 @@
-module yizhan
+module sssingbox
 
 go 1.27.3
 

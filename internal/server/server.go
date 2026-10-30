@@ -23,12 +23,12 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"yizhan/internal/cores"
-	"yizhan/internal/proxy"
-	"yizhan/internal/stats"
-	"yizhan/internal/store"
-	"yizhan/internal/sysinfo"
-	"yizhan/internal/version"
+	"sssingbox/internal/cores"
+	"sssingbox/internal/proxy"
+	"sssingbox/internal/stats"
+	"sssingbox/internal/store"
+	"sssingbox/internal/sysinfo"
+	"sssingbox/internal/version"
 )
 
 // session 是内存登录态：24h 有效。改密码时除当前会话外全部吊销，
@@ -140,7 +140,7 @@ func randToken() string {
 }
 
 func (s *Server) authed(r *http.Request) bool {
-	c, err := r.Cookie("yizhan_session")
+	c, err := r.Cookie("sssingbox_session")
 	if err != nil {
 		return false
 	}
@@ -155,7 +155,7 @@ func (s *Server) authed(r *http.Request) bool {
 
 // sessionUser 返回当前登录会话的用户名（改密码等按用户操作的接口用）。
 func (s *Server) sessionUser(r *http.Request) (string, bool) {
-	c, err := r.Cookie("yizhan_session")
+	c, err := r.Cookie("sssingbox_session")
 	if err != nil {
 		return "", false
 	}
@@ -287,17 +287,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.sessMu.Lock()
 	s.sessions[tok] = session{username: body.Username, exp: time.Now().Add(24 * time.Hour)}
 	s.sessMu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "yizhan_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	okJSON(w, map[string]interface{}{"username": body.Username})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie("yizhan_session"); err == nil {
+	if c, err := r.Cookie("sssingbox_session"); err == nil {
 		s.sessMu.Lock()
 		delete(s.sessions, c.Value)
 		s.sessMu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: "yizhan_session", Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: "", Path: "/", MaxAge: -1})
 	okJSON(w, nil)
 }
 
@@ -322,7 +322,7 @@ func (s *Server) setSession(w http.ResponseWriter, username string) {
 	s.sessMu.Lock()
 	s.sessions[tok] = session{username: username, exp: time.Now().Add(24 * time.Hour)}
 	s.sessMu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "yizhan_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -2692,7 +2692,7 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 			errJSON(w, 500, err.Error())
 			return
 		}
-		if c, err := r.Cookie("yizhan_session"); err == nil {
+		if c, err := r.Cookie("sssingbox_session"); err == nil {
 			s.revokeSessionsExcept(c.Value)
 		}
 		okJSON(w, nil)

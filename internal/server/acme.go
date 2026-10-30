@@ -302,7 +302,7 @@ func (c *acmeClient) pollUntil(url string, fn func([]byte) (done bool, err error
 }
 
 // http01Challenge：HTTP-01 挑战应答方（调用方在订单期间提供，
-// 龟甲用面板前置服务；驿站用订单期间临时绑 :80 的服务器，见 panelcert.go）。
+// 龟甲用面板前置服务；sssingbox用订单期间临时绑 :80 的服务器，见 panelcert.go）。
 type http01Challenge interface {
 	Register(token, keyAuth string)
 	Clear(token string)

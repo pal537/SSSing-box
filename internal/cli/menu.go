@@ -1,6 +1,6 @@
 package cli
 
-// 交互菜单：SSH 里跑 `yizhan menu`，不用打开面板就能建节点、管节点。
+// 交互菜单：SSH 里跑 `sssingbox menu`，不用打开面板就能建节点、管节点。
 
 import (
 	"bufio"
@@ -55,7 +55,7 @@ func runMenu(o options) int {
 	}
 	for {
 		fmt.Println()
-		fmt.Println("============ 驿站管理 ============")
+		fmt.Println("============ sssingbox管理 ============")
 		fmt.Println("1. 创建节点")
 		fmt.Println("2. 节点列表")
 		fmt.Println("3. 删除节点")
@@ -319,7 +319,7 @@ func menuCreate(c *client) {
 			if strings.Contains(err.Error(), "mtg") {
 				core = "mtg"
 			}
-			fmt.Printf("先装内核再创建：yizhan core install %s\n", core)
+			fmt.Printf("先装内核再创建：sssingbox core install %s\n", core)
 		}
 		return
 	}

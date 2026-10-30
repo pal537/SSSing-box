@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"yizhan/internal/cores"
-	"yizhan/internal/proxy"
-	"yizhan/internal/store"
-	"yizhan/internal/sysinfo"
+	"sssingbox/internal/cores"
+	"sssingbox/internal/proxy"
+	"sssingbox/internal/store"
+	"sssingbox/internal/sysinfo"
 )
 
 // App wires store, cores and config generation.

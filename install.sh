@@ -1,30 +1,30 @@
 #!/bin/bash
-# 驿站面板一键安装脚本。
+# sssingbox面板一键安装脚本。
 #
 # 一键命令（默认自动生成面板账号密码，不用打开初始化页面）：
-#   curl -fsSL https://raw.githubusercontent.com/pal537/yizhan/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/pal537/sssingbox/main/install.sh | bash
 # 自定义（环境变量）：
-#   YIZHAN_USER=admin YIZHAN_PASS=xxxx YIZHAN_PORT=18081 bash install.sh
+#   SSSINGBOX_USER=admin SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash install.sh
 # 本地安装包模式：
-#   bash install.sh --from-file yizhan-linux-amd64.tar.gz [--port 18081] [--data-dir /var/lib/yizhan]
-#   安装包是 tar.gz，根目录含一个 yizhan 二进制。
+#   bash install.sh --from-file sssingbox-linux-amd64.tar.gz [--port 18081] [--data-dir /var/lib/sssingbox]
+#   安装包是 tar.gz，根目录含一个 sssingbox 二进制。
 # 卸载（保留数据目录，彻底删除见提示）：
 #   bash install.sh uninstall
 #
-# 重装 = 更新：已装过时脚本会备份旧二进制（yizhan.bak-YYYYMMDDHHMMSS），
+# 重装 = 更新：已装过时脚本会备份旧二进制（sssingbox.bak-YYYYMMDDHHMMSS），
 # 换上新二进制并重启服务；已有管理员时跳过初始化，不覆盖旧账号。
 set -euo pipefail
 
 BIN_DIR="/usr/local/bin"
-BIN_PATH="$BIN_DIR/yizhan"
-SERVICE="yizhan"
-PORT="${YIZHAN_PORT:-18081}"
-DATA_DIR="/var/lib/yizhan"
+BIN_PATH="$BIN_DIR/sssingbox"
+SERVICE="sssingbox"
+PORT="${SSSINGBOX_PORT:-18081}"
+DATA_DIR="/var/lib/sssingbox"
 FROM_FILE=""
-REPO="${YIZHAN_REPO:-pal537/yizhan}"
+REPO="${SSSINGBOX_REPO:-pal537/sssingbox}"
 
 if [ "${1:-}" = "uninstall" ]; then
-	echo "正在卸载驿站..."
+	echo "正在卸载sssingbox..."
 	systemctl stop "$SERVICE" 2>/dev/null || true
 	systemctl disable "$SERVICE" 2>/dev/null || true
 	rm -f "/etc/systemd/system/$SERVICE.service" "$BIN_PATH"
@@ -35,10 +35,10 @@ fi
 
 usage() {
 	echo "用法：bash install.sh [--from-file 安装包.tar.gz] [--port 端口] [--data-dir 数据目录]"
-	echo "  --from-file  本地安装包（tar.gz，根目录含 yizhan 二进制）"
+	echo "  --from-file  本地安装包（tar.gz，根目录含 sssingbox 二进制）"
 	echo "  --port       面板端口（默认 18081）"
-	echo "  --data-dir   数据目录（默认 /var/lib/yizhan）"
-	echo "  环境变量 YIZHAN_REPO=owner/repo：设了才走 GitHub 发布下载；没设 + 没给 --from-file 时脚本直接说明并退出。"
+	echo "  --data-dir   数据目录（默认 /var/lib/sssingbox）"
+	echo "  环境变量 SSSINGBOX_REPO=owner/repo：设了才走 GitHub 发布下载；没设 + 没给 --from-file 时脚本直接说明并退出。"
 }
 
 while [ $# -gt 0 ]; do
@@ -71,7 +71,7 @@ if [ -n "$FROM_FILE" ]; then
 	tar xzf "$FROM_FILE" -C "$WORK"
 else
 	echo "GitHub 发布模式：$REPO（linux-$ARCH）"
-	ASSET="yizhan-linux-$ARCH.tar.gz"
+	ASSET="sssingbox-linux-$ARCH.tar.gz"
 	TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | cut -d'"' -f4 || true)"
 	if [ -n "$TAG" ]; then
 		echo "下载 $TAG/$ASSET ..."
@@ -90,23 +90,23 @@ else
 	tar xzf "$WORK/$ASSET" -C "$WORK"
 fi
 
-if [ ! -x "$WORK/yizhan" ]; then
-	echo "错误：安装包里没有可执行的 yizhan 二进制"
+if [ ! -x "$WORK/sssingbox" ]; then
+	echo "错误：安装包里没有可执行的 sssingbox 二进制"
 	exit 1
 fi
-echo "二进制自检：$("$WORK/yizhan" -version)"
+echo "二进制自检：$("$WORK/sssingbox" -version)"
 
 mkdir -p "$DATA_DIR"
 if [ -x "$BIN_PATH" ]; then
-	BAK="$BIN_DIR/yizhan.bak-$(date +%Y%m%d%H%M%S)"
+	BAK="$BIN_DIR/sssingbox.bak-$(date +%Y%m%d%H%M%S)"
 	cp "$BIN_PATH" "$BAK"
 	echo "旧二进制已备份到 $BAK"
 fi
-install -m 0755 "$WORK/yizhan" "$BIN_PATH"
+install -m 0755 "$WORK/sssingbox" "$BIN_PATH"
 
 cat > "/etc/systemd/system/$SERVICE.service" <<EOF
 [Unit]
-Description=驿站面板
+Description=sssingbox面板
 After=network-online.target
 Wants=network-online.target
 
@@ -141,9 +141,9 @@ for i in $(seq 1 30); do
 done
 
 # 初始化账号：已有管理员时（升级重装）跳过，不覆盖旧账号。
-# 账号密码默认自动生成，不用打开初始化页面；CLI 凭证一并写好，yizhan 命令开箱即用。
-USER_NAME="${YIZHAN_USER:-admin}"
-PASS="${YIZHAN_PASS:-}"
+# 账号密码默认自动生成，不用打开初始化页面；CLI 凭证一并写好，sssingbox 命令开箱即用。
+USER_NAME="${SSSINGBOX_USER:-admin}"
+PASS="${SSSINGBOX_PASS:-}"
 GENERATED=""
 if [ -z "$PASS" ]; then
 	PASS="$(head -c 256 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 16)"
@@ -169,15 +169,15 @@ IP="$(curl -s --max-time 5 ifconfig.me || true)"
 if [ -z "$IP" ]; then IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; fi
 if [ -z "$IP" ]; then IP="服务器IP"; fi
 echo ""
-echo "================ 驿站安装完成 ================"
+echo "================ sssingbox安装完成 ================"
 echo "面板地址：http://$IP:$PORT/"
 if [ "$SETUP_OK" = "1" ]; then
 	echo "面板账号：$USER_NAME"
 	echo "面板密码：$PASS"
 	if [ -n "$GENERATED" ]; then echo "（密码为自动生成，请保存好）"; fi
 else
-	echo "面板账号：沿用旧账号（CLI 凭证没动过的话，yizhan 命令仍可用；改过密码请跑 yizhan login）"
+	echo "面板账号：沿用旧账号（CLI 凭证没动过的话，sssingbox 命令仍可用；改过密码请跑 sssingbox login）"
 fi
-echo "SSH 管理：yizhan menu（交互菜单，不用打开面板就能建节点）"
+echo "SSH 管理：sssingbox menu（交互菜单，不用打开面板就能建节点）"
 echo "卸载：bash install.sh uninstall（数据目录保留）"
 echo "=============================================="

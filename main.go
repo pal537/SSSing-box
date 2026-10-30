@@ -13,18 +13,18 @@ import (
 	"syscall"
 	"time"
 
-	"yizhan/internal/cli"
-	"yizhan/internal/server"
-	"yizhan/internal/stats"
-	"yizhan/internal/store"
-	"yizhan/internal/version"
+	"sssingbox/internal/cli"
+	"sssingbox/internal/server"
+	"sssingbox/internal/stats"
+	"sssingbox/internal/store"
+	"sssingbox/internal/version"
 )
 
 //go:embed web
 var webFS embed.FS
 
 func main() {
-	// CLI 子命令（yizhan menu / node / status / sub / login / admin / version）：
+	// CLI 子命令（sssingbox menu / node / status / sub / login / admin / version）：
 	// 第一个参数是不带 - 的子命令名时走 CLI，不启动面板。
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -32,20 +32,20 @@ func main() {
 			os.Exit(cli.Run(os.Args[1:]))
 		}
 	}
-	dataDir := flag.String("data", "/var/lib/yizhan", "数据目录")
+	dataDir := flag.String("data", "/var/lib/sssingbox", "数据目录")
 	port := flag.Int("port", 18081, "面板端口")
 	showVersion := flag.Bool("version", false, "打印面板版本号并退出")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("yizhan %s\n", version.Version)
+		fmt.Printf("sssingbox %s\n", version.Version)
 		return
 	}
 
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
 		fatal(err)
 	}
-	st, err := store.Open(filepath.Join(*dataDir, "yizhan.db"))
+	st, err := store.Open(filepath.Join(*dataDir, "sssingbox.db"))
 	if err != nil {
 		fatal(err)
 	}
@@ -60,7 +60,7 @@ func main() {
 	// panel is opened with zero users, the setup page asks for a username
 	// and password (twice) and creates the first admin there.
 	if st.UserCount() == 0 {
-		fmt.Println("驿站首次启动：还没有管理员，首次打开面板时请设置账号密码")
+		fmt.Println("sssingbox首次启动：还没有管理员，首次打开面板时请设置账号密码")
 	}
 	if tok, err := st.GetSettingErr("sub_token"); err != nil {
 		// 读失败时绝不生成新 token 覆盖：DB 抖动一次就会让已发出的订阅全失效。

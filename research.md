@@ -1,7 +1,7 @@
-# 驿站面板调研：配置细节
+# sssingbox面板调研：配置细节
 
 > 调研日期：2026-10-29
-> 目的：给新做的极简多协议代理面板（暂名「驿站」）提供可落地的配置字段与命令，供开发时直接照抄。
+> 目的：给新做的极简多协议代理面板（暂名「sssingbox」）提供可落地的配置字段与命令，供开发时直接照抄。
 > 资料来源：XTLS 官方文档（xtls.github.io）、sing-box 官方文档（sing-box.sagernet.org）、Hysteria 官方文档（hysteria.network / v2.hysteria.network）、9seconds/mtg 官方文档（pkg.go.dev 镜像的仓库 README）、3x-ui 入站结构（以 3x-ui API 兼容层 go-x3ui / gox-ui 的结构体为准，与 3x-ui 入站表单一一对应；3x-ui 官方前端源码未逐行通读，个别面板语义标注「未确认」）。
 > 原则：凡是没查到的写「未确认」，不编。示例里的密钥、UUID、IP 均为占位。
 
@@ -19,7 +19,7 @@
 | port | 监听端口。面板默认自动建议（443 能用推 443） | 简单 |
 | protocol | 协议名，`vless` | 固定 |
 | tag | 入站 tag，面板自动生成（xray 路由/统计用），用户不用填 | 内置 |
-| expiryTime | 入站级到期时间，毫秒时间戳，0 = 不限 | 高级（3x-ui 表单有，驿站可默认不限） |
+| expiryTime | 入站级到期时间，毫秒时间戳，0 = 不限 | 高级（3x-ui 表单有，sssingbox可默认不限） |
 | up / down / total | 面板维护的流量计数（字节），不是 xray 配置项 | 面板字段 |
 | settings | JSON 字符串，见 1.2 | — |
 | streamSettings | JSON 字符串，见 1.3 | — |
@@ -33,7 +33,7 @@
 |---|---|
 | clients[] | 客户端列表，见 1.3 |
 | decryption | 固定 `"none"`（Reality + Vision 不再做协议内加密） |
-| fallbacks[] | VLESS fallback 列表。3x-ui 一般不用，驿站高级配置里保留入口即可 |
+| fallbacks[] | VLESS fallback 列表。3x-ui 一般不用，sssingbox高级配置里保留入口即可 |
 
 ### 1.3 客户端字段（InboundClient，即 3x-ui 表单里的「客户」）
 
@@ -46,11 +46,11 @@
 | totalGB | 流量上限（GB），0 = 不限 | 高级 |
 | expiryTime | 客户端到期，毫秒时间戳，0 = 不限 | 高级 |
 | enable | 是否启用该客户端 | 简单 |
-| tgId | 关联的 Telegram ID（3x-ui 的 TG 机器人用），驿站没有 TG 机器人可不做 | 可不做 |
-| subId | 订阅 ID（3x-ui 订阅功能用），驿站订阅链接用自己的规则即可 | 可不做 |
+| tgId | 关联的 Telegram ID（3x-ui 的 TG 机器人用），sssingbox没有 TG 机器人可不做 | 可不做 |
+| subId | 订阅 ID（3x-ui 订阅功能用），sssingbox订阅链接用自己的规则即可 | 可不做 |
 | reset | 面板侧流量统计字段，具体语义（疑似按月重置日）**未确认** | 面板字段 |
 
-> 驿站一键建节点时，客户端只保留一个（单用户），其余多用户管理是 3x-ui 的复杂来源之一，驿站不做。
+> sssingbox一键建节点时，客户端只保留一个（单用户），其余多用户管理是 3x-ui 的复杂来源之一，sssingbox不做。
 
 ### 1.4 streamSettings（VLESS + TCP + Reality）
 
@@ -59,7 +59,7 @@ network = "tcp"
 security = "reality"
 tcpSettings.acceptProxyProtocol = false
 tcpSettings.header.type = "none"
-externalProxy = []   // 3x-ui 结构里的保留字段，驿站不用
+externalProxy = []   // 3x-ui 结构里的保留字段，sssingbox不用
 ```
 
 realitySettings（服务端，3x-ui 表单暴露的全部项）：
@@ -77,13 +77,13 @@ realitySettings（服务端，3x-ui 表单暴露的全部项）：
 | show | 调试开关，生产固定 false | 内置 |
 | xver | PROXY protocol 版本，0 = 关闭，1 / 2 = 开启。面板固定 0 | 内置 |
 
-xray-core 新版 realitySettings 还有以下字段（3x-ui 表单未必暴露，驿站高级配置应一并支持，避免缺项）：
+xray-core 新版 realitySettings 还有以下字段（3x-ui 表单未必暴露，sssingbox高级配置应一并支持，避免缺项）：
 
 | 字段 | 说明 |
 |---|---|
 | minClientVer / maxClientVer | 客户端版本范围限制，如 `"1.8.0"` / `""` |
 | maxTimeDiff | 客户端与服务端时间差容忍（秒），0 = 不限制 |
-| target | dest 的旧别名，二者填一个即可，驿站只用 dest |
+| target | dest 的旧别名，二者填一个即可，sssingbox只用 dest |
 | mldsa65Seed / mldsa65Verify | ML-DSA 后量子签名（xray-core v25.x+ 新引入），旧版没有 |
 | limitFallbackUpload / limitFallbackDownload | 回落流量的限速 |
 | masterKeyLog | 调试用密钥日志路径，生产不用 |
@@ -93,7 +93,7 @@ xray-core 新版 realitySettings 还有以下字段（3x-ui 表单未必暴露�
 - **uTLS = fingerprint 字段**（见上表），不是独立字段。3x-ui 表单里的「uTLS」下拉框就是 fingerprint。
 - **alpn：xray-core 的 realitySettings 里没有这个字段**（以 `infra/conf` 的 REALITYConfig 结构为准）。ALPN 是 tlsSettings 的字段，Reality 不用。3x-ui 在 security=reality 时不展示 ALPN。
 - **allowInsecure：xray-core 的 realitySettings 里也没有这个字段**。它只出现在部分客户端示例/旧文档的 realitySettings 里，服务端不用填；Reality 的信任锚是 publicKey，不是证书链，所以不存在「跳过证书验证」这个概念。
-- **TLS 侧字段（仅当 security=tls 时出现，与 Reality 互斥）**：certs[]（证书文件路径或证书内容）、alpn[]、minVersion / maxVersion、cipherSuites[]、fingerprint、allowInsecure、rejectUnknownSni、ECH（echServerKeys / echConfigList / echForceQuery）。驿站只做 Reality 时可以不做 TLS 入站，但高级配置清单里应知道它们的存在，避免日后补 TLS 入站时缺项。
+- **TLS 侧字段（仅当 security=tls 时出现，与 Reality 互斥）**：certs[]（证书文件路径或证书内容）、alpn[]、minVersion / maxVersion、cipherSuites[]、fingerprint、allowInsecure、rejectUnknownSni、ECH（echServerKeys / echConfigList / echForceQuery）。sssingbox只做 Reality 时可以不做 TLS 入站，但高级配置清单里应知道它们的存在，避免日后补 TLS 入站时缺项。
 
 ### 1.6 sniffing（流量嗅探，链式域名分流必须开）
 
@@ -114,7 +114,7 @@ xray-core 新版 realitySettings 还有以下字段（3x-ui 表单未必暴露�
 | refresh | 刷新间隔 |
 | concurrency | 并发数 |
 
-驿站固定端口场景用不到，列为保留项，高级配置里可隐藏。
+sssingbox固定端口场景用不到，列为保留项，高级配置里可隐藏。
 
 ### 1.8 客户端订阅链接格式（VLESS + Reality + Vision）
 

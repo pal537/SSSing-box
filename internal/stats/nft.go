@@ -21,22 +21,22 @@ import (
 // 方向约定与旧 xray 一致：入方向 = 客户端上传（up），出方向 = 客户端下载（down）。
 //
 // 规则管理原则：
-//   - 表和链由面板创建（inet yizhan-<数据目录哈希> / in / out，见 SetDataDir），
+//   - 表和链由面板创建（inet sssingbox-<数据目录哈希> / in / out，见 SetDataDir），
 //     只动自己 comment 标记的规则，绝不 flush 整表——flush 会清零所有计数器。
 //   - 轮询循环每次同步规则（只增缺失、只删多余），重启/手动 flush 后自愈。
 //   - 计数器重置（重启、规则重建）由 PollOnce 的“当前 < 上次则按当前算”兜底，
 //     与旧核心重启语义一致。
 
-const nftComment = "yizhan-stats"
+const nftComment = "sssingbox-stats"
 
 // nftTable is per panel instance, derived from the data directory, so two
 // panels on one machine (production + a test instance, or two test
 // instances) never share one table. Sharing one table was a real bug:
-// SyncStatsRules deletes "yizhan-stats" rules for ports it doesn't want,
+// SyncStatsRules deletes "sssingbox-stats" rules for ports it doesn't want,
 // so two panels kept deleting each other's rules and resetting counters.
-// Production /var/lib/yizhan and a test /tmp/.../data therefore get
+// Production /var/lib/sssingbox and a test /tmp/.../data therefore get
 // different tables deterministically, with no config to remember.
-var nftTable = "yizhan"
+var nftTable = "sssingbox"
 
 // SetDataDir fixes the stats table for this panel instance. It must be
 // called once at startup, before any stats call.
@@ -46,7 +46,7 @@ func SetDataDir(dir string) {
 		abs = dir
 	}
 	sum := sha256.Sum256([]byte(abs))
-	nftTable = "yizhan-" + hex.EncodeToString(sum[:])[:8]
+	nftTable = "sssingbox-" + hex.EncodeToString(sum[:])[:8]
 }
 
 // TableName reports the stats table this instance uses (for logs/docs).
@@ -271,7 +271,7 @@ func SyncStatsRules(wantPorts map[int]bool) error {
 				if have[key] {
 					continue
 				}
-				if _, err := nftRun("add", "rule", "inet", nftTable, chain, proto, field, strconv.Itoa(port), "counter", "comment", `"yizhan-stats"`); err != nil {
+				if _, err := nftRun("add", "rule", "inet", nftTable, chain, proto, field, strconv.Itoa(port), "counter", "comment", `"sssingbox-stats"`); err != nil {
 					return err
 				}
 			}

@@ -1,6 +1,6 @@
 # sing-box 主导设计（Phase 1，甲骨文 only）
 
-对应迁移计划 ~/workspace/yizhan/MIGRATION-SINGBOX.md。设计先行，代码按此文档实现。
+对应迁移计划 ~/workspace/sssingbox/MIGRATION-SINGBOX.md。设计先行，代码按此文档实现。
 
 **2026-10-30 已对 sing-box 官方文档逐项核对**（TUIC / TLS / Naive / WireGuard endpoint / Rule Action 五页原文 + AnyTLS 实现源码 + VLESS 选项结构多方印证）。核对后修正了初版 6 处，见各节“已核对”标注；最终兜底是实现时 `sing-box check` 逐份校验生成配置，文档核对代替不了这一步。
 
@@ -81,9 +81,9 @@
 - 订阅：链接生成函数按协议分支改写（vless / vmess / trojan / ss / socks / http / wg / hy2 链接格式不变；tuic / anytls / naive 新增格式并逐客户端核对）。
 - dokodemo：sing-box 无对应入站，砍掉。甲骨文现有 14 节点里没有 dokodemo 节点，零影响；迁移时如遇 dokodemo 记录直接报错拦截，不静默丢弃。
 
-## 对标 233boy/sing-box（2026-10-30，用户要求：她支持的，驿站也要支持）
+## 对标 233boy/sing-box（2026-10-30，用户要求：她支持的，sssingbox也要支持）
 
-来源：[233boy/sing-box README](https://github.com/233boy/sing-box) 特点清单 + 驿站代码实测。
+来源：[233boy/sing-box README](https://github.com/233boy/sing-box) 特点清单 + sssingbox代码实测。
 
 - **已覆盖（不用补）**：VLESS-REALITY、TUIC、Trojan、Hysteria2、AnyTLS、Shadowsocks 2022、VMess-TCP、VMess-WS+TLS（CF 自签档）、Trojan-WS+TLS（CF 自签档）。
 - **新增缺口（补进设计）**：
@@ -91,8 +91,8 @@
   - VMess + HTTP（明文）、QUIC、H2 / HTTPUpgrade-TLS 四档。
   - Trojan + H2 / HTTPUpgrade-TLS 两档。
   - sing-box 传输类型对照（官方 V2Ray Transport 页）：WS = `ws`、H2 = `http` + TLS、HTTPUpgrade = `httpupgrade`、QUIC = `quic`（必须配 TLS）、明文 HTTP = `http`（不配 TLS）。sing-box 无 TCP 传输（裸 TCP = 不写 transport）、无 mKCP。
-  - 证书：233boy 的 -TLS 档走 Caddy 自动真证书；驿站的 CF 档是自签（CF Full 接受）。新增的直连 -TLS 档必须走真证书，复用上面“TLS 档通用证书流程”（上传 / ACME），不引入 Caddy。
-- **驿站已超集（233boy 没有）**：Naive、WireGuard、SOCKS、HTTP、MTProto、链式代理。按原计划保留，不砍。
+  - 证书：233boy 的 -TLS 档走 Caddy 自动真证书；sssingbox的 CF 档是自签（CF Full 接受）。新增的直连 -TLS 档必须走真证书，复用上面“TLS 档通用证书流程”（上传 / ACME），不引入 Caddy。
+- **sssingbox已超集（233boy 没有）**：Naive、WireGuard、SOCKS、HTTP、MTProto、链式代理。按原计划保留，不砍。
 - **不跟的项**：BBR（一键启用 BBR 是主机内核调优，不是协议，不进面板；真要开给他一条命令即可）；DNS 设置（服务端直连出站不依赖面板 DNS，不需要）；导入配置（脚本形态 vs 面板结构化节点，形态不同）；gRPC（233boy 清单里没有，sing-box 原生支持 type grpc，官方构建为 lite 实现——传输层通用能力随同实现，但不进首批档位，后续可选）。
 
 ## 实施顺序
@@ -121,6 +121,6 @@
 - [ ] 全部生成配置过 `sing-box check`（实现时逐份验，这是最终兜底）
 
 ## 2026-10-30 补记（test4 已落地）
-- nft 表：按数据目录哈希区分实例（yizhan-<hash>），双面板同机不再互删规则；旧版生产不走 nft，不受影响。
+- nft 表：按数据目录哈希区分实例（sssingbox-<hash>），双面板同机不再互删规则；旧版生产不走 nft，不受影响。
 - Hy2 在线人数：sing-box 无按入站在线数，面板 online 恒 0，已知缺口，非 bug。
 - Naive：面板侧全验（建节点禁用→传证书→自动启用→监听→TLS 1.3 握手→非 naive 请求被拒），真客户端全程因标准 sing-box 二进制缺 cronet 库而无法验证，留待真 naive 客户端。

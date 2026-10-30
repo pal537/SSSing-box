@@ -110,7 +110,7 @@ func ListReleases(repo string) ([]Release, error) {
 
 	url := "https://api.github.com/repos/" + repo + "/releases?per_page=30"
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "yizhan-panel")
+	req.Header.Set("User-Agent", "sssingbox-panel")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
@@ -353,14 +353,14 @@ func (m *Manager) Install(name, version string) (string, error) {
 	if tag == "" {
 		tag = version
 	}
-	tmp, err := os.CreateTemp("", "yizhan-core-*")
+	tmp, err := os.CreateTemp("", "sssingbox-core-*")
 	if err != nil {
 		return "", err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "yizhan-panel")
+	req.Header.Set("User-Agent", "sssingbox-panel")
 	resp, err := (&http.Client{Timeout: 10 * time.Minute}).Do(req)
 	if err != nil {
 		tmp.Close()

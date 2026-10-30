@@ -9,11 +9,11 @@ import (
 )
 
 // TestSingBoxFullConfig 生成一份覆盖全部协议/档位/链式的 singbox.json，
-// 供 `sing-box check` 做结构校验（见 /tmp/yizhan-singbox-check/ 输出）。
+// 供 `sing-box check` 做结构校验（见 /tmp/sssingbox-singbox-check/ 输出）。
 // 注意：测试用自签证书只为让 check 能读到证书文件；Naive 生产必须用 CA 证书，
 // 那是面板策略，不是 check 的约束。
 func TestSingBoxFullConfig(t *testing.T) {
-	dir := "/tmp/yizhan-singbox-check"
+	dir := "/tmp/sssingbox-singbox-check"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}

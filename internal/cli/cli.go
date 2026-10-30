@@ -5,7 +5,7 @@ package cli
 // 不存在双写冲突。面板没运行时，节点类命令会报错并提示先启动面板。
 //
 // 凭证：安装器把生成的账号写进 <数据目录>/.cli-credentials（0600，仅 root 可读），
-// CLI 读它登录；面板里改过密码后，用 `yizhan login` 重新保存一次即可。
+// CLI 读它登录；面板里改过密码后，用 `sssingbox login` 重新保存一次即可。
 
 import (
 	"bytes"
@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"yizhan/internal/store"
-	"yizhan/internal/version"
+	"sssingbox/internal/store"
+	"sssingbox/internal/version"
 )
 
 type options struct {
@@ -40,18 +40,18 @@ type credentials struct {
 func credPath(dataDir string) string { return filepath.Join(dataDir, ".cli-credentials") }
 
 func loadCredentials(dataDir string) (credentials, error) {
-	if u := os.Getenv("YIZHAN_USER"); u != "" {
-		if p := os.Getenv("YIZHAN_PASS"); p != "" {
+	if u := os.Getenv("SSSINGBOX_USER"); u != "" {
+		if p := os.Getenv("SSSINGBOX_PASS"); p != "" {
 			return credentials{Username: u, Password: p}, nil
 		}
 	}
 	b, err := os.ReadFile(credPath(dataDir))
 	if err != nil {
-		return credentials{}, fmt.Errorf("未找到 CLI 凭证文件 %s（安装器自动生成；面板里改过密码后请跑 yizhan login 重新保存）", credPath(dataDir))
+		return credentials{}, fmt.Errorf("未找到 CLI 凭证文件 %s（安装器自动生成；面板里改过密码后请跑 sssingbox login 重新保存）", credPath(dataDir))
 	}
 	var c credentials
 	if err := json.Unmarshal(b, &c); err != nil || c.Username == "" {
-		return credentials{}, fmt.Errorf("CLI 凭证文件损坏，请跑 yizhan login 重新保存")
+		return credentials{}, fmt.Errorf("CLI 凭证文件损坏，请跑 sssingbox login 重新保存")
 	}
 	return c, nil
 }
@@ -96,9 +96,9 @@ func newClient(o options) (*client, error) {
 		if out.OK {
 			return &client{base: base, http: hc}, nil
 		}
-		return nil, fmt.Errorf("面板登录失败：%s（账号密码不对，或凭证文件已过期，跑 yizhan login 重新保存）", out.Error)
+		return nil, fmt.Errorf("面板登录失败：%s（账号密码不对，或凭证文件已过期，跑 sssingbox login 重新保存）", out.Error)
 	}
-	return nil, fmt.Errorf("连不上本机面板（端口 %d）：面板没运行的话先 systemctl start yizhan", o.port)
+	return nil, fmt.Errorf("连不上本机面板（端口 %d）：面板没运行的话先 systemctl start sssingbox", o.port)
 }
 
 func (c *client) call(method, path string, payload interface{}) (map[string]interface{}, error) {
@@ -211,15 +211,15 @@ func createPayload(protocol string, port int, name, sni string, advanced map[str
 // Run：argv[0] 是子命令。返回进程退出码。
 func Run(args []string) int {
 	if len(args) == 0 {
-		fmt.Println("用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan core list|install | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version")
+		fmt.Println("用法：sssingbox menu | sssingbox node list|add|rm|on|off | sssingbox core list|install | sssingbox status | sssingbox sub | sssingbox login | sssingbox admin reset | sssingbox version")
 		return 2
 	}
-	// 子命令后的 flag（如 yizhan node add -protocol vless）由各子命令自己再解析，
+	// 子命令后的 flag（如 sssingbox node add -protocol vless）由各子命令自己再解析，
 	// 这里只把 -data/-port 摘出来，其余原样留给子命令。
 	// 例外：node add 自带 -port（节点监听端口，0=自动分配），不能被当成面板端口摘走，
-	// 否则 yizhan node add -port 0 会去连面板 0 端口。node add 的面板端口固定走默认 18081。
+	// 否则 sssingbox node add -port 0 会去连面板 0 端口。node add 的面板端口固定走默认 18081。
 	isNodeAdd := len(args) >= 2 && args[0] == "node" && args[1] == "add"
-	dataDir := "/var/lib/yizhan"
+	dataDir := "/var/lib/sssingbox"
 	port := 18081
 	var rest []string
 	for i := 1; i < len(args); i++ {
@@ -251,17 +251,17 @@ func Run(args []string) int {
 		if len(rest) > 0 && rest[0] == "reset" {
 			return runAdminReset(o)
 		}
-		fmt.Println("用法：yizhan admin reset（重置面板管理员密码）")
+		fmt.Println("用法：sssingbox admin reset（重置面板管理员密码）")
 		return 2
 	case "core":
 		return runCore(o, rest)
 	case "node":
 		return runNode(o, rest)
 	case "version":
-		fmt.Printf("yizhan %s\n", version.Version)
+		fmt.Printf("sssingbox %s\n", version.Version)
 		return 0
 	default:
-		fmt.Printf("未知子命令：%s\n用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan core list|install | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version\n", args[0])
+		fmt.Printf("未知子命令：%s\n用法：sssingbox menu | sssingbox node list|add|rm|on|off | sssingbox core list|install | sssingbox status | sssingbox sub | sssingbox login | sssingbox admin reset | sssingbox version\n", args[0])
 		return 2
 	}
 }
@@ -347,7 +347,7 @@ func runLogin(o options) int {
 				fmt.Println("登录成功，但凭证文件保存失败：", err)
 				return 1
 			}
-			fmt.Println("登录成功，凭证已保存（仅 root 可读），以后 yizhan 命令不用再输密码")
+			fmt.Println("登录成功，凭证已保存（仅 root 可读），以后 sssingbox 命令不用再输密码")
 			return 0
 		}
 		fmt.Println("登录失败：", out.Error)
@@ -358,7 +358,7 @@ func runLogin(o options) int {
 }
 
 func runAdminReset(o options) int {
-	st, err := store.Open(filepath.Join(o.dataDir, "yizhan.db"))
+	st, err := store.Open(filepath.Join(o.dataDir, "sssingbox.db"))
 	if err != nil {
 		fmt.Println("打开数据库失败：", err)
 		return 1
@@ -370,7 +370,7 @@ func runAdminReset(o options) int {
 		user = "admin"
 	}
 	if _, err := st.GetUser(user); err != nil {
-		fmt.Printf("账号 %s 不存在（面板里改过用户名的话，yizhan admin reset 目前只认 admin）\n", user)
+		fmt.Printf("账号 %s 不存在（面板里改过用户名的话，sssingbox admin reset 目前只认 admin）\n", user)
 		return 1
 	}
 	p1 := readPassword("新密码：")
@@ -384,17 +384,17 @@ func runAdminReset(o options) int {
 		fmt.Println("密码更新失败：", err)
 		return 1
 	}
-	// CLI 凭证同步更新，否则下次 yizhan 命令会用旧密码登录失败。
+	// CLI 凭证同步更新，否则下次 sssingbox 命令会用旧密码登录失败。
 	_ = saveCredentials(o.dataDir, credentials{Username: user, Password: p1})
 	fmt.Println("密码已重置，CLI 凭证已同步更新（面板里已登录的会话不受影响）")
 	return 0
 }
 
-// runCore：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]。
+// runCore：sssingbox core list | sssingbox core install <sing-box|mtg> [-version <tag>]。
 // 建节点要求内核先装好；纯 SSH 流程（不用面板）就靠它装内核，否则第一个节点永远建不出来。
 func runCore(o options, args []string) int {
 	if len(args) == 0 {
-		fmt.Println("用法：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]（version 留空=最新版）")
+		fmt.Println("用法：sssingbox core list | sssingbox core install <sing-box|mtg> [-version <tag>]（version 留空=最新版）")
 		return 2
 	}
 	c, err := newClient(o)
@@ -431,7 +431,7 @@ func runCore(o options, args []string) int {
 		return 0
 	case "install":
 		if len(args) < 2 {
-			fmt.Println("用法：yizhan core install <sing-box|mtg> [-version <tag>]")
+			fmt.Println("用法：sssingbox core install <sing-box|mtg> [-version <tag>]")
 			return 2
 		}
 		name := args[1]
@@ -453,14 +453,14 @@ func runCore(o options, args []string) int {
 		fmt.Printf("已安装 %s %v\n", name, data["version"])
 		return 0
 	default:
-		fmt.Println("用法：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]")
+		fmt.Println("用法：sssingbox core list | sssingbox core install <sing-box|mtg> [-version <tag>]")
 		return 2
 	}
 }
 
 func runNode(o options, args []string) int {
 	if len(args) == 0 {
-		fmt.Println("用法：yizhan node list | yizhan node add -protocol vless [-mode reality] [-port 0] | yizhan node rm <id/端口/名字> | yizhan node on|off <id/端口/名字>")
+		fmt.Println("用法：sssingbox node list | sssingbox node add -protocol vless [-mode reality] [-port 0] | sssingbox node rm <id/端口/名字> | sssingbox node on|off <id/端口/名字>")
 		return 2
 	}
 	switch args[0] {
@@ -538,7 +538,7 @@ func runNode(o options, args []string) int {
 				if strings.Contains(err.Error(), "mtg") {
 					core = "mtg"
 				}
-				fmt.Printf("先装内核再创建：yizhan core install %s\n", core)
+				fmt.Printf("先装内核再创建：sssingbox core install %s\n", core)
 			}
 			return 1
 		}
@@ -566,7 +566,7 @@ func runNode(o options, args []string) int {
 		return 0
 	case "rm":
 		if len(args) < 2 {
-			fmt.Println("用法：yizhan node rm <id/端口/名字>")
+			fmt.Println("用法：sssingbox node rm <id/端口/名字>")
 			return 2
 		}
 		c, err := newClient(o)
@@ -591,7 +591,7 @@ func runNode(o options, args []string) int {
 		return 0
 	case "on", "off":
 		if len(args) < 2 {
-			fmt.Println("用法：yizhan node on|off <id/端口/名字>")
+			fmt.Println("用法：sssingbox node on|off <id/端口/名字>")
 			return 2
 		}
 		c, err := newClient(o)
@@ -612,7 +612,7 @@ func runNode(o options, args []string) int {
 		fmt.Println("已", map[bool]string{true: "启用", false: "停用"}[enabled])
 		return 0
 	default:
-		fmt.Println("用法：yizhan node list | yizhan node add -protocol vless | yizhan node rm <id/端口/名字> | yizhan node on|off <id/端口/名字>")
+		fmt.Println("用法：sssingbox node list | sssingbox node add -protocol vless | sssingbox node rm <id/端口/名字> | sssingbox node on|off <id/端口/名字>")
 		return 2
 	}
 }
