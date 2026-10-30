@@ -2686,6 +2686,37 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// syncCliCredentials：面板改账号/密码时同步更新 CLI 凭证文件，让改动立即
+// 对 SSH 命令行也生效，不用再跑 sssingbox login。文件不存在时不创建
+// （手动部署本来就没有 CLI 凭证文件，别凭空造一个）；只传了 username
+// 或 password 其中一项时，另一项沿用文件里的旧值；写失败也不影响面板
+// 本身的改动（面板登录以数据库为准，CLI 只是它的一个副本）。
+func (s *Server) syncCliCredentials(username, password string) {
+	path := filepath.Join(s.app.Dir, ".cli-credentials")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var c struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return
+	}
+	if username != "" {
+		c.Username = username
+	}
+	if password != "" {
+		c.Password = password
+	}
+	out, err := json.Marshal(c)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, out, 0600)
+}
+
 func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/settings/")
 	switch rest {
@@ -2720,6 +2751,8 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 				errJSON(w, 500, err.Error())
 				return
 			}
+			// 账号改了，CLI 凭证文件里的账号同步跟上，SSH 命令行不用再跑 login。
+			s.syncCliCredentials(body.New, "")
 		}
 		// 当前会话跟上新账号，其他会话吊销（旧账号的会话不能再留着）。
 		if c, err := r.Cookie("sssingbox_session"); err == nil {
@@ -2766,6 +2799,8 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 			errJSON(w, 500, err.Error())
 			return
 		}
+		// 密码改了，CLI 凭证文件里的密码同步跟上，SSH 命令行不用再跑 login。
+		s.syncCliCredentials(username, body.New)
 		if c, err := r.Cookie("sssingbox_session"); err == nil {
 			s.revokeSessionsExcept(c.Value)
 		}

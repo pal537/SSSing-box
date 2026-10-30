@@ -144,6 +144,7 @@
 
     <!-- ===== 面板设置 ===== -->
     <div id="view-settings" class="view">
+      <div class="cols2">
       <div class="card">
         <h3>在线更新</h3>
         <div class="form-grid">
@@ -166,10 +167,11 @@
           <div><label>再输一次新密码</label><input id="pwNew2" type="password"></div>
           <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changePassword()">修改密码</button></div>
         </div>
-        <div class="hint">改完账号后，SSH 里要重跑 sssingbox login，不然命令行还用旧账号登录，会失败。</div>
+        <div class="hint">改完立即生效，SSH 命令行同步更新，无需再跑命令。</div>
+      </div>
       </div>
 
-      <div class="card">
+      <div class="card sub-card">
         <h3>面板域名和证书</h3>
         <div class="form-grid">
           <div class="full"><label>面板的域名和证书：证书域名就是面板域名，节点链接和订阅默认用它。默认 HTTP，选一张证书并启用 HTTPS 才变。</label>

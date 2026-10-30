@@ -1319,7 +1319,7 @@ async function changeUsername(){
   if (!v){ toast('新账号不能为空', true); return; }
   try {
     const r = await api('/api/settings/username', 'POST', { new: v });
-    toast('账号已改为 ' + r.username + '，SSH 里请重跑 sssingbox login');
+    toast('账号已改为 ' + r.username + '，立即生效');
     $('curUser').value = r.username; $('newUser').value = '';
   } catch(e){ toast(e.message, true); }
 }
