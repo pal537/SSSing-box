@@ -146,7 +146,7 @@ USER_NAME="${YIZHAN_USER:-admin}"
 PASS="${YIZHAN_PASS:-}"
 GENERATED=""
 if [ -z "$PASS" ]; then
-	PASS="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)"
+	PASS="$(head -c 256 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 16)"
 	GENERATED=1
 fi
 SETUP_OUT="$(curl -s --max-time 10 -X POST "http://127.0.0.1:$PORT/api/setup" \
