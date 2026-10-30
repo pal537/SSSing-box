@@ -314,6 +314,13 @@ func menuCreate(c *client) {
 	data, err := c.call("POST", "/api/inbounds", createPayload(proto, port, name, sni, adv))
 	if err != nil {
 		fmt.Println("创建失败：", err)
+		if strings.Contains(err.Error(), "内核还没安装") {
+			core := "sing-box"
+			if strings.Contains(err.Error(), "mtg") {
+				core = "mtg"
+			}
+			fmt.Printf("先装内核再创建：yizhan core install %s\n", core)
+		}
 		return
 	}
 	inb, _ := data["inbound"].(map[string]interface{})

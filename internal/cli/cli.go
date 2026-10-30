@@ -211,7 +211,7 @@ func createPayload(protocol string, port int, name, sni string, advanced map[str
 // Run：argv[0] 是子命令。返回进程退出码。
 func Run(args []string) int {
 	if len(args) == 0 {
-		fmt.Println("用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version")
+		fmt.Println("用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan core list|install | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version")
 		return 2
 	}
 	// 子命令后的 flag（如 yizhan node add -protocol vless）由各子命令自己再解析，
@@ -253,13 +253,15 @@ func Run(args []string) int {
 		}
 		fmt.Println("用法：yizhan admin reset（重置面板管理员密码）")
 		return 2
+	case "core":
+		return runCore(o, rest)
 	case "node":
 		return runNode(o, rest)
 	case "version":
 		fmt.Printf("yizhan %s\n", version.Version)
 		return 0
 	default:
-		fmt.Printf("未知子命令：%s\n用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version\n", args[0])
+		fmt.Printf("未知子命令：%s\n用法：yizhan menu | yizhan node list|add|rm|on|off | yizhan core list|install | yizhan status | yizhan sub | yizhan login | yizhan admin reset | yizhan version\n", args[0])
 		return 2
 	}
 }
@@ -388,6 +390,74 @@ func runAdminReset(o options) int {
 	return 0
 }
 
+// runCore：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]。
+// 建节点要求内核先装好；纯 SSH 流程（不用面板）就靠它装内核，否则第一个节点永远建不出来。
+func runCore(o options, args []string) int {
+	if len(args) == 0 {
+		fmt.Println("用法：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]（version 留空=最新版）")
+		return 2
+	}
+	c, err := newClient(o)
+	if err != nil {
+		fmt.Println("错误：", err)
+		return 1
+	}
+	switch args[0] {
+	case "list":
+		env, err := c.call("GET", "/api/cores", nil)
+		if err != nil {
+			fmt.Println("错误：", err)
+			return 1
+		}
+		arr, _ := env["data"].([]interface{})
+		if len(arr) == 0 {
+			fmt.Println("没有内核信息")
+			return 0
+		}
+		for _, item := range arr {
+			row, _ := item.(map[string]interface{})
+			if row == nil {
+				continue
+			}
+			state := "未安装"
+			if installed, _ := row["installed"].(bool); installed {
+				state = fmt.Sprintf("已安装 %v", row["version"])
+				if running, _ := row["running"].(bool); running {
+					state += "（运行中）"
+				}
+			}
+			fmt.Printf("%-10s %s\n", row["name"], state)
+		}
+		return 0
+	case "install":
+		if len(args) < 2 {
+			fmt.Println("用法：yizhan core install <sing-box|mtg> [-version <tag>]")
+			return 2
+		}
+		name := args[1]
+		version := ""
+		for i := 2; i < len(args); i++ {
+			if args[i] == "-version" && i+1 < len(args) {
+				version = args[i+1]
+				i++
+			} else if strings.HasPrefix(args[i], "-version=") {
+				version = strings.TrimPrefix(args[i], "-version=")
+			}
+		}
+		fmt.Printf("正在安装 %s 内核（版本留空=最新版）…\n", name)
+		data, err := c.call("POST", "/api/cores/"+name+"/install", map[string]interface{}{"version": version})
+		if err != nil {
+			fmt.Println("安装失败：", err)
+			return 1
+		}
+		fmt.Printf("已安装 %s %v\n", name, data["version"])
+		return 0
+	default:
+		fmt.Println("用法：yizhan core list | yizhan core install <sing-box|mtg> [-version <tag>]")
+		return 2
+	}
+}
+
 func runNode(o options, args []string) int {
 	if len(args) == 0 {
 		fmt.Println("用法：yizhan node list | yizhan node add -protocol vless [-mode reality] [-port 0] | yizhan node rm <id/端口/名字> | yizhan node on|off <id/端口/名字>")
@@ -463,6 +533,13 @@ func runNode(o options, args []string) int {
 		data, err := c.call("POST", "/api/inbounds", createPayload(*protocol, *port, *name, *sni, adv))
 		if err != nil {
 			fmt.Println("创建失败：", err)
+			if strings.Contains(err.Error(), "内核还没安装") {
+				core := "sing-box"
+				if strings.Contains(err.Error(), "mtg") {
+					core = "mtg"
+				}
+				fmt.Printf("先装内核再创建：yizhan core install %s\n", core)
+			}
 			return 1
 		}
 		inb, _ := data["inbound"].(map[string]interface{})
