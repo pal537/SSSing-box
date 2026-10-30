@@ -8,10 +8,10 @@
 curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash
 ```
 
-装完直接打印面板地址、账号、密码（自动生成，不用打开初始化页面）。也可以自定义：
+装完直接打印面板地址、账号、密码（自动生成，不用打开初始化页面）。也可以自定义（环境变量写在 bash 前面）：
 
 ```bash
-SSSINGBOX_USER=admin SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash install.sh
+curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | SSSINGBOX_USER=xxxx SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash
 ```
 
 ![节点列表](docs/screenshots/1-nodes.png)
@@ -40,8 +40,10 @@ sssingbox admin reset   # 重置管理员密码
 ## 卸载
 
 ```bash
-bash install.sh uninstall   # 数据目录保留，彻底删除：rm -rf /var/lib/sssingbox
+curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash -s uninstall   # 数据目录保留，彻底删除：rm -rf /var/lib/sssingbox
 ```
+
+本地已有 install.sh 时，`bash install.sh uninstall` 也一样。
 
 ## 自己编译
 
@@ -49,4 +51,6 @@ bash install.sh uninstall   # 数据目录保留，彻底删除：rm -rf /var/li
 go build -o sssingbox .
 ./sssingbox -data /var/lib/sssingbox -port 18081
 ```
+
+不带版本号编译出来是 dev 版，在线更新会拒绝 dev 版；需要版本号时编译加 `-ldflags "-X sssingbox/internal/version.Version=<标签>"`。
 

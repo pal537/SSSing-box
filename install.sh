@@ -3,13 +3,14 @@
 #
 # 一键命令（默认自动生成面板账号密码，不用打开初始化页面）：
 #   curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash
-# 自定义（环境变量，不设则账号密码都随机生成）：
-#   SSSINGBOX_USER=xxxx SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash install.sh
+# 自定义（环境变量写在 bash 前面，不设则账号密码都随机生成）：
+#   curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | SSSINGBOX_USER=xxxx SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash
 # 本地安装包模式：
 #   bash install.sh --from-file sssingbox-linux-amd64.tar.gz [--port 18081] [--data-dir /var/lib/sssingbox]
 #   安装包是 tar.gz，根目录含一个 sssingbox 二进制。
 # 卸载（保留数据目录，彻底删除见提示）：
-#   bash install.sh uninstall
+#   curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash -s uninstall
+#   本地已有 install.sh 时，bash install.sh uninstall 也一样。
 #
 # 重装 = 更新：已装过时脚本会备份旧二进制（sssingbox.bak-YYYYMMDDHHMMSS），
 # 换上新二进制并重启服务；已有管理员时跳过初始化，不覆盖旧账号。
@@ -38,7 +39,7 @@ usage() {
 	echo "  --from-file  本地安装包（tar.gz，根目录含 sssingbox 二进制）"
 	echo "  --port       面板端口（默认 18081）"
 	echo "  --data-dir   数据目录（默认 /var/lib/sssingbox）"
-	echo "  环境变量 SSSINGBOX_REPO=owner/repo：设了才走 GitHub 发布下载；没设 + 没给 --from-file 时脚本直接说明并退出。"
+	echo "  环境变量 SSSINGBOX_REPO=owner/repo：默认 pal537/SSSing-box，不设就用默认仓库下载；--from-file 时用本地安装包，不走 GitHub。"
 }
 
 while [ $# -gt 0 ]; do
@@ -185,5 +186,5 @@ else
 	echo "面板账号：沿用旧账号（CLI 凭证没动过的话，sssingbox 命令仍可用；改过密码请跑 sssingbox login）"
 fi
 echo "SSH 管理：sssingbox menu（交互菜单，不用打开面板就能建节点）"
-echo "卸载：bash install.sh uninstall（数据目录保留）"
+echo "卸载：curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash -s uninstall（数据目录保留）"
 echo "=============================================="
