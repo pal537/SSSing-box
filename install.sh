@@ -2,9 +2,9 @@
 # sssingbox面板一键安装脚本。
 #
 # 一键命令（默认自动生成面板账号密码，不用打开初始化页面）：
-#   curl -fsSL https://raw.githubusercontent.com/pal537/sssingbox/main/install.sh | bash
-# 自定义（环境变量）：
-#   SSSINGBOX_USER=admin SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash install.sh
+#   curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash
+# 自定义（环境变量，不设则账号密码都随机生成）：
+#   SSSINGBOX_USER=xxxx SSSINGBOX_PASS=xxxx SSSINGBOX_PORT=18081 bash install.sh
 # 本地安装包模式：
 #   bash install.sh --from-file sssingbox-linux-amd64.tar.gz [--port 18081] [--data-dir /var/lib/sssingbox]
 #   安装包是 tar.gz，根目录含一个 sssingbox 二进制。
@@ -21,7 +21,7 @@ SERVICE="sssingbox"
 PORT="${SSSINGBOX_PORT:-18081}"
 DATA_DIR="/var/lib/sssingbox"
 FROM_FILE=""
-REPO="${SSSINGBOX_REPO:-pal537/sssingbox}"
+REPO="${SSSINGBOX_REPO:-pal537/SSSing-box}"
 
 if [ "${1:-}" = "uninstall" ]; then
 	echo "正在卸载sssingbox..."
@@ -141,8 +141,14 @@ for i in $(seq 1 30); do
 done
 
 # 初始化账号：已有管理员时（升级重装）跳过，不覆盖旧账号。
-# 账号密码默认自动生成，不用打开初始化页面；CLI 凭证一并写好，sssingbox 命令开箱即用。
-USER_NAME="${SSSINGBOX_USER:-admin}"
+# 账号密码默认都自动生成（账号绝不默认 admin），不用打开初始化页面；
+# CLI 凭证一并写好，sssingbox 命令开箱即用。
+USER_NAME="${SSSINGBOX_USER:-}"
+USER_GENERATED=""
+if [ -z "$USER_NAME" ]; then
+	USER_NAME="$(head -c 256 /dev/urandom | tr -dc 'abcdefghjkmnpqrstuvwxyz' | head -c 1)$(head -c 256 /dev/urandom | tr -dc 'abcdefghjkmnpqrstuvwxyz23456789' | head -c 7)"
+	USER_GENERATED=1
+fi
 PASS="${SSSINGBOX_PASS:-}"
 GENERATED=""
 if [ -z "$PASS" ]; then
@@ -169,12 +175,12 @@ IP="$(curl -s --max-time 5 ifconfig.me || true)"
 if [ -z "$IP" ]; then IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; fi
 if [ -z "$IP" ]; then IP="服务器IP"; fi
 echo ""
-echo "================ sssingbox安装完成 ================"
+echo "================ SSSing-box安装完成 ================"
 echo "面板地址：http://$IP:$PORT/"
 if [ "$SETUP_OK" = "1" ]; then
 	echo "面板账号：$USER_NAME"
 	echo "面板密码：$PASS"
-	if [ -n "$GENERATED" ]; then echo "（密码为自动生成，请保存好）"; fi
+	if [ -n "$GENERATED" ] || [ -n "$USER_GENERATED" ]; then echo "（账号/密码为自动生成，请保存好）"; fi
 else
 	echo "面板账号：沿用旧账号（CLI 凭证没动过的话，sssingbox 命令仍可用；改过密码请跑 sssingbox login）"
 fi

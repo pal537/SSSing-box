@@ -96,8 +96,16 @@ function hideAllAuth(){
   $('loginView').style.display = 'none';
   $('appView').style.display = 'none';
 }
+// 随机账号：首位字母，后 7 位字母数字（不含易混的 0/1/o/l），绝不默认 admin。
+function randomUsername(){
+  const first = 'abcdefghjkmnpqrstuvwxyz', rest = first + '23456789';
+  let s = first[Math.floor(Math.random() * first.length)];
+  for (let i = 0; i < 7; i++) s += rest[Math.floor(Math.random() * rest.length)];
+  return s;
+}
 function showSetup(){
   hideAllAuth();
+  if ($('setupUser') && !$('setupUser').value) $('setupUser').value = randomUsername();
   $('setupView').style.display = 'flex';
   if (POLL){ clearInterval(POLL); POLL = null; }
 }
@@ -115,7 +123,9 @@ function showApp(){
 }
 async function doSetup(){
   $('setupErr').textContent = '';
-  const u = $('setupUser').value.trim(), p = $('setupPass').value, p2 = $('setupPass2').value;
+  let u = $('setupUser').value.trim();
+  if (!u){ u = randomUsername(); $('setupUser').value = u; }
+  const p = $('setupPass').value, p2 = $('setupPass2').value;
   if (p !== p2){ $('setupErr').textContent = '两次输入的密码不一致'; return; }
   try {
     await api('/api/setup', 'POST', { username: u, password: p, password2: p2 });
@@ -168,7 +178,11 @@ function renderSystem(d){
 }
 
 // ---------- cores ----------
+// 安装中的内核：名字 -> 当前阶段文案。状态页每 5 秒重绘内核卡片，
+// 以前重绘会把进行中的“下载中…”按钮整个换回“下载”，等于没反馈；
+// 现在重绘按这张表渲染，按钮状态在安装结束前不会被刷新抹掉。
 let CORE_LIST = [];
+const CORE_INSTALL = {};
 async function refreshCores(){
   const list = await api('/api/cores');
   CORE_LIST = list;
@@ -178,25 +192,46 @@ async function refreshCores(){
     <div class="row core-row">
       <span class="dot ${c.running ? 'on' : 'off'}"></span>
       <div class="grow"><div class="t">${c.title}</div>
-        <div class="s">${c.installed ? ('已安装 ' + c.version + (c.has_update ? ' · 有新版本 ' + c.latest : '')) : '未下载，不占空间'}${c.note ? ' · ' + c.note : ''}${c.name === 'sing-box' ? ' · 全部非 MTG 节点的主内核' : ''}</div></div>
+        <div class="s">${c.installed ? ('已安装 ' + c.version + (c.has_update ? ' · 有新版本 ' + c.latest : '')) : '未下载，不占空间'}${c.note ? ' · ' + c.note : ''}${c.name === 'sing-box' ? ' · 通用代理内核' : ''}${c.name === 'mtg' ? ' · Telegram 专用代理内核' : ''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        ${c.installed
-          ? `${c.no_update ? '' : `<button class="btn ghost small" onclick="openVerDialog('${c.name}','${c.title}')">更新</button>`}
-             <button class="btn ghost small" onclick="restartCore('${c.name}')">重启</button>
-             <button class="btn ghost small" onclick="showCoreLog('${c.name}','${c.title}')">日志</button>`
-          : `<button class="btn small" onclick="installCore('${c.name}','')">下载</button>`}
+        ${CORE_INSTALL[c.name]
+          ? `<button class="btn small" data-install-core="${c.name}" disabled>${CORE_INSTALL[c.name]}</button>`
+          : (c.installed
+            ? `${c.no_update ? '' : `<button class="btn ghost small" onclick="openVerDialog('${c.name}','${c.title}')">更新</button>`}
+               <button class="btn ghost small" onclick="restartCore('${c.name}')">重启</button>
+               <button class="btn ghost small" onclick="showCoreLog('${c.name}','${c.title}')">日志</button>`
+            : `<button class="btn small" data-install-core="${c.name}" onclick="installCore('${c.name}','')">下载</button>`)}
       </div>
     </div>`).join('');
 }
+// 安装进度轮询：服务端在下载阶段报 downloading，解压写入阶段报 installing；
+// 前端按真实阶段改按钮文案，不用假计时。轮询只改按钮文案，不重绘整张卡。
+function pollCoreProgress(name, setText){
+  return setInterval(async () => {
+    try {
+      const p = await api('/api/cores/progress');
+      const phase = p && p[name];
+      if (phase === 'installing'){ CORE_INSTALL[name] = '安装中…'; setText('安装中…'); }
+      else if (phase === 'downloading'){ CORE_INSTALL[name] = '下载中…'; setText('下载中…'); }
+    } catch(_){}
+  }, 800);
+}
+function coreInstallBtn(name){
+  return document.querySelector('[data-install-core="' + name + '"]');
+}
 async function installCore(name, version){
+  if (CORE_INSTALL[name]) return;
+  CORE_INSTALL[name] = '下载中…';
   const btn = event.target;
-  const old = btn.textContent; btn.disabled = true; btn.textContent = '下载中…';
+  btn.disabled = true; btn.textContent = '下载中…';
+  const timer = pollCoreProgress(name, t => { const b = coreInstallBtn(name) || btn; b.textContent = t; });
   try {
     const r = await api('/api/cores/' + name + '/install', 'POST', { version: version || '' });
     toast(name + ' 已安装 ' + r.version);
-    refreshCores(); refreshStatus();
   } catch(e){ toast(e.message, true); }
-  btn.disabled = false; btn.textContent = old;
+  clearInterval(timer);
+  delete CORE_INSTALL[name];
+  refreshCores(); refreshStatus();
 }
 async function openVerDialog(name, title){
   openModal(`<h4>${title} · 选择版本安装</h4><div class="ver-list" id="verList"><div class="muted" style="padding:14px">正在获取版本…</div></div>
@@ -209,7 +244,10 @@ async function openVerDialog(name, title){
   } catch(e){ $('verMsg').className = 'msg err'; $('verMsg').textContent = e.message; }
 }
 async function installCoreVer(name, ver, btn){
-  btn.disabled = true; btn.textContent = ver + ' 安装中…';
+  if (CORE_INSTALL[name]) return;
+  CORE_INSTALL[name] = '下载中…';
+  btn.disabled = true; btn.textContent = '下载中…';
+  const timer = pollCoreProgress(name, t => { btn.textContent = t; });
   try {
     const r = await api('/api/cores/' + name + '/install', 'POST', { version: ver });
     toast(name + ' 已安装 ' + r.version);
@@ -218,6 +256,8 @@ async function installCoreVer(name, ver, btn){
     $('verMsg').className = 'msg err'; $('verMsg').textContent = e.message;
     btn.disabled = false; btn.textContent = ver;
   }
+  clearInterval(timer);
+  delete CORE_INSTALL[name];
 }
 async function restartCore(name){
   try { await api('/api/cores/' + name + '/restart', 'POST', {}); toast(name + ' 已重启'); refreshStatus(); }
@@ -1268,6 +1308,84 @@ async function loadSettings(){
   try {
     await loadPanelCerts();
   } catch(e){}
+  try {
+    const me = await api('/api/me');
+    if ($('curUser')) $('curUser').value = me.username || '';
+  } catch(e){}
+  checkUpdate(true);
+}
+async function changeUsername(){
+  const v = $('newUser').value.trim();
+  if (!v){ toast('新账号不能为空', true); return; }
+  try {
+    const r = await api('/api/settings/username', 'POST', { new: v });
+    toast('账号已改为 ' + r.username + '，SSH 里请重跑 sssingbox login');
+    $('curUser').value = r.username; $('newUser').value = '';
+  } catch(e){ toast(e.message, true); }
+}
+// ---------- 在线更新 ----------
+// 自动检查：打开面板设置时查一次；面板启动后后台每 12 小时再查一次
+// （服务端存着最新版和检查时间）。更新永远手动点，不自动装。
+let UPD_LATEST = '';
+async function checkUpdate(auto){
+  const msg = $('updMsg'); if (!msg) return;
+  const btn = $('updCheckBtn');
+  if (btn) btn.disabled = true;
+  if (!auto) msg.textContent = '正在检查…';
+  try {
+    const r = await api('/api/update/check', 'POST', {});
+    if ($('updCur')) $('updCur').value = r.current || '';
+    if ($('updLatest')) $('updLatest').value = r.latest || '未查到';
+    if ($('updChecked')) $('updChecked').value = r.checked_at || '';
+    UPD_LATEST = r.latest || '';
+    const apply = $('updApplyBtn');
+    if (apply) apply.disabled = !r.has_update;
+    msg.textContent = r.has_update ? ('有新版 ' + r.latest + '，点“更新到最新版”手动更新。') : (r.latest ? '已是最新版。' : '没查到新版信息，稍后再试。');
+  } catch(e){
+    msg.textContent = '检查失败：' + e.message;
+  }
+  if (btn) btn.disabled = false;
+}
+async function applyUpdate(){
+  if (!UPD_LATEST) { toast('先检查更新', true); return; }
+  const btn = $('updApplyBtn'); const msg = $('updMsg');
+  btn.disabled = true; btn.textContent = '下载中…';
+  let timer = setInterval(async () => {
+    try {
+      const p = await api('/api/update/progress');
+      if (p.phase === 'installing') btn.textContent = '安装中…';
+      else if (p.phase === 'downloading') btn.textContent = '下载中…';
+      else if (p.phase === 'restarting') btn.textContent = '重启中…';
+    } catch(_){}
+  }, 800);
+  try {
+    const r = await api('/api/update/apply', 'POST', {});
+    clearInterval(timer);
+    if (r.restart_required){
+      msg.textContent = '已更新到 ' + r.version + '，但面板未自动重启（非标准安装路径），请手动重启面板服务后再登录验证版本。';
+      btn.disabled = false; btn.textContent = '更新到最新版';
+      return;
+    }
+    msg.textContent = '已更新到 ' + r.version + '，面板正在重启…';
+    btn.textContent = '重启中…';
+    // 重启后内存会话全清，必须重新登录；轮询面板起来后回到登录页。
+    let tries = 0;
+    const wait = setInterval(async () => {
+      tries++;
+      try {
+        await fetch('/api/setup-status');
+        clearInterval(wait);
+        msg.textContent = '更新完成（' + r.version + '），请重新登录。';
+        btn.textContent = '更新到最新版';
+        showLogin();
+      } catch(_){}
+      if (tries > 45){ clearInterval(wait); msg.textContent = '面板 90 秒还没起来，请手动刷新或看服务日志。'; btn.disabled = false; btn.textContent = '更新到最新版'; }
+    }, 2000);
+  } catch(e){
+    clearInterval(timer);
+    msg.textContent = '更新失败：' + e.message;
+    btn.disabled = false; btn.textContent = '更新到最新版';
+  }
 }
 // ---------- 面板域名和证书（手动添加 / 在线申请 / 启用 HTTPS） ----------
 let PANEL_CERTS = [];

@@ -366,11 +366,16 @@ func runAdminReset(o options) int {
 	defer st.Close()
 	user := prompt("要重置的账号（留空用第一个管理员）：")
 	if user == "" {
-		// 没有列用户的接口，直接试常见的 admin，不存在再报错。
-		user = "admin"
+		// 面板账号可能是随机生成的，不再默认 admin：取库里第一个账号。
+		users := st.ListUsers()
+		if len(users) == 0 {
+			fmt.Println("库里没有账号，先在面板里创建管理员")
+			return 1
+		}
+		user = users[0]
 	}
 	if _, err := st.GetUser(user); err != nil {
-		fmt.Printf("账号 %s 不存在（面板里改过用户名的话，sssingbox admin reset 目前只认 admin）\n", user)
+		fmt.Printf("账号 %s 不存在\n", user)
 		return 1
 	}
 	p1 := readPassword("新密码：")

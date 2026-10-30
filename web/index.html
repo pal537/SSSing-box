@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sssingbox · 多协议代理面板</title>
+<title>SSSing-box · 多协议代理面板</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,10 +11,10 @@
 <!-- first-run setup -->
 <div id="setupView" class="login-wrap" style="display:none">
   <div class="login-card">
-    <div class="logo-mark">S</div>
-    <h1>欢迎使用sssingbox</h1>
-    <p>首次打开，先设置一个管理员账号</p>
-    <div class="field"><label>用户名</label><input id="setupUser" value="admin" autocomplete="username"></div>
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></div>
+    <h1>欢迎使用 SSSing-box</h1>
+    <p>首次打开，先设置一个管理员账号（用户名已随机生成，可改）</p>
+    <div class="field"><label>用户名</label><input id="setupUser" autocomplete="username"></div>
     <div class="field"><label>密码（至少 6 位）</label><input id="setupPass" type="password" autocomplete="new-password"></div>
     <div class="field"><label>再输一次密码</label><input id="setupPass2" type="password" autocomplete="new-password"></div>
     <button class="btn" style="width:100%" onclick="doSetup()">创建管理员并进入</button>
@@ -25,10 +25,10 @@
 <!-- login -->
 <div id="loginView" class="login-wrap" style="display:none">
   <div class="login-card">
-    <div class="logo-mark">S</div>
-    <h1>sssingbox</h1>
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></div>
+    <h1>SSSing-box</h1>
     <p>多协议代理面板</p>
-    <div class="field"><label>账号</label><input id="loginUser" value="admin" autocomplete="username"></div>
+    <div class="field"><label>账号</label><input id="loginUser" autocomplete="username"></div>
     <div class="field"><label>密码</label><input id="loginPass" type="password" autocomplete="current-password"></div>
     <button class="btn" style="width:100%" onclick="doLogin()">登录</button>
     <div class="err" id="loginErr"></div>
@@ -38,7 +38,7 @@
 <!-- app -->
 <div id="appView" style="display:none">
   <div class="topbar"><div class="topbar-in">
-    <div class="logo"><span class="logo-mark">S</span>sssingbox</div>
+    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></span>SSSing-box</div>
     <nav class="nav">
       <button data-view="status" class="on" onclick="showView('status')">系统状态</button>
       <button data-view="inbounds" onclick="showView('inbounds')">入站列表</button>
@@ -76,7 +76,7 @@
 
       <div class="cols2">
         <div class="card">
-          <h3>内核 <span class="sub">面板本身不带内核，在这里下载；更新要点开选版本。sing-box 是全部非 MTG 节点的主内核，MTProto 走独立的 mtg 内核</span></h3>
+          <h3>内核 <span class="sub">先下载内核，再建节点。Sing-box：通用代理内核；MTProto：Telegram 专用代理内核</span></h3>
           <div id="coreRows"></div>
         </div>
 
@@ -145,13 +145,28 @@
     <!-- ===== 面板设置 ===== -->
     <div id="view-settings" class="view">
       <div class="card">
+        <h3>在线更新</h3>
+        <div class="form-grid">
+          <div><label>当前版本</label><input id="updCur" readonly></div>
+          <div><label>最新版本</label><input id="updLatest" readonly></div>
+          <div><label>上次检查</label><input id="updChecked" readonly></div>
+          <div style="display:flex;align-items:flex-end;gap:8px"><button class="btn ghost small" id="updCheckBtn" onclick="checkUpdate()">检查更新</button><button class="btn small" id="updApplyBtn" onclick="applyUpdate()" disabled>更新到最新版</button></div>
+        </div>
+        <div class="hint" id="updMsg">打开面板设置时自动检查一次；更新是手动点的，不会自动装。更新后面板会重启，要重新登录。</div>
+      </div>
+
+      <div class="card">
         <h3>面板登录</h3>
         <div class="form-grid">
+          <div><label>当前账号</label><input id="curUser" readonly></div>
+          <div><label>新账号</label><input id="newUser" placeholder="留空不改"></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changeUsername()">修改账号</button></div>
           <div><label>旧密码</label><input id="pwOld" type="password"></div>
           <div><label>新密码（至少 6 位）</label><input id="pwNew" type="password"></div>
           <div><label>再输一次新密码</label><input id="pwNew2" type="password"></div>
           <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changePassword()">修改密码</button></div>
         </div>
+        <div class="hint">改完账号后，SSH 里要重跑 sssingbox login，不然命令行还用旧账号登录，会失败。</div>
       </div>
 
       <div class="card">

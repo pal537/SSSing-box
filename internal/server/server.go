@@ -53,6 +53,9 @@ type Server struct {
 	statsMu   sync.Mutex
 	webFS     http.FileSystem
 
+	// 在线更新进度（update.go）：downloading/installing/restarting，空=闲置。
+	updMu    sync.Mutex
+	updPhase string
 	// 面板域名证书（panelcert.go）：数据目录 certs/panel/。
 	certs *panelCertManager
 	// Serve 循环与监听重启：启用 HTTPS / 换证 / 续期时重启监听。
@@ -85,6 +88,7 @@ func New(app *App, webFS http.FileSystem) *Server {
 	s.certs = newPanelCertManager(filepath.Join(app.Dir, "certs", "panel"), app.Store.GetSetting, app.Store.SetSetting)
 	s.certs.restartFn = func() { s.RequestRestart() }
 	s.poller = stats.NewPoller(s.portTags)
+	s.startPanelUpdateChecker()
 	return s
 }
 
@@ -215,7 +219,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/system", auth(s.handleSystem))
 	mux.HandleFunc("/api/usage", auth(s.handleUsage))
 	mux.HandleFunc("/api/cores", auth(s.handleCores))
+	// 进度查询不走 mutating：安装本身占着 writeMu，进度要是也等
+	// 这把锁，就永远查不到进行中的阶段（前端按钮没反馈的根因之一）。
+	mux.HandleFunc("/api/cores/progress", auth(s.handleCoreProgress))
 	mux.HandleFunc("/api/cores/", auth(s.mutating(s.handleCoreAction)))
+	// 在线更新：check 不走 mutating（GitHub 拉取耗时，不能堵住全部写接口）；
+	// apply 走 mutating（二进制替换期间不许其他写操作交错）；progress 不走 mutating。
+	mux.HandleFunc("/api/update/check", auth(s.handleUpdateCheck))
+	mux.HandleFunc("/api/update/apply", auth(s.mutating(s.handleUpdateApply)))
+	mux.HandleFunc("/api/update/progress", auth(s.handleUpdateProgress))
 	mux.HandleFunc("/api/inbounds", auth(s.mutating(s.handleInbounds)))
 	mux.HandleFunc("/api/inbounds/", auth(s.mutating(s.handleInboundAction)))
 	mux.HandleFunc("/api/suggest-port", auth(s.handleSuggestPort))
@@ -302,11 +314,12 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	if !s.authed(r) {
+	username, ok := s.sessionUser(r)
+	if !ok {
 		errJSON(w, 401, "未登录")
 		return
 	}
-	okJSON(w, map[string]interface{}{"authed": true})
+	okJSON(w, map[string]interface{}{"authed": true, "username": username})
 }
 
 // ---------- first-run setup ----------
@@ -381,12 +394,12 @@ func (s *Server) effectiveAddress(in *store.Inbound) string {
 // ---------- system & usage ----------
 
 // handleVersion：面板自身版本 + 更新源状态。
-// 更新源未配置时 update_source_configured=false，一键更新不启用——
-// 宁可明说没接源，也不假装能更新（更新源等 GitHub 发布后填 update_url 设置）。
+// 更新源已固定为面板自己的 GitHub 仓库（cores.PanelRepo），
+// 不再靠 update_url 设置项——源一直都在，一键更新始终启用。
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	okJSON(w, map[string]interface{}{
 		"version":                  version.Version,
-		"update_source_configured": s.app.Store.GetSetting("update_url") != "",
+		"update_source_configured": true,
 	})
 }
 
@@ -617,6 +630,16 @@ func (s *Server) handleCores(w http.ResponseWriter, r *http.Request) {
 	okJSON(w, out)
 }
 
+// handleCoreProgress：返回各内核当前的安装阶段（downloading/installing）。
+// 前端安装时每 800ms 查一次，按真实阶段改按钮文案；安装结束后进度自动清掉。
+func (s *Server) handleCoreProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		errJSON(w, 405, "method")
+		return
+	}
+	okJSON(w, s.app.Mgr.Progress())
+}
+
 func (s *Server) handleCoreAction(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/cores/")
 	parts := strings.SplitN(rest, "/", 2)
@@ -666,6 +689,14 @@ func (s *Server) handleCoreAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if mtgPinned() {
+				// 老 CPU 机器：本地没存货时先从面板 Release 下载存货，
+				// 下不到才报错——不能再让用户点下载只看到“没有编译版存货”。
+				if !s.app.Mgr.HasStockMTG() {
+					if _, derr := s.app.Mgr.DownloadStockMTG(); derr != nil {
+						errJSON(w, 500, "下载安装失败：编译版存货下载失败："+derr.Error())
+						return
+					}
+				}
 				tag, err = s.app.Mgr.InstallStockMTG()
 			} else {
 				tag, err = s.app.Mgr.Install(name, body.Version)
@@ -2658,6 +2689,49 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/settings/")
 	switch rest {
+	case "username":
+		if r.Method != "POST" {
+			errJSON(w, 405, "method")
+			return
+		}
+		var body struct {
+			New string `json:"new"`
+		}
+		if err := s.readJSON(r, &body); err != nil {
+			errJSON(w, 400, "请求格式不对")
+			return
+		}
+		old, ok := s.sessionUser(r)
+		if !ok || old == "" {
+			errJSON(w, 401, "未登录")
+			return
+		}
+		body.New = strings.TrimSpace(body.New)
+		if body.New == "" || len(body.New) > 32 || strings.ContainsAny(body.New, " \t\n") {
+			errJSON(w, 400, "新账号不能为空、不能含空格、不能超 32 位")
+			return
+		}
+		if body.New != old {
+			if _, err := s.app.Store.GetUser(body.New); err == nil {
+				errJSON(w, 400, "账号已存在")
+				return
+			}
+			if err := s.app.Store.RenameUser(old, body.New); err != nil {
+				errJSON(w, 500, err.Error())
+				return
+			}
+		}
+		// 当前会话跟上新账号，其他会话吊销（旧账号的会话不能再留着）。
+		if c, err := r.Cookie("sssingbox_session"); err == nil {
+			s.sessMu.Lock()
+			if sess, ok := s.sessions[c.Value]; ok {
+				sess.username = body.New
+				s.sessions[c.Value] = sess
+			}
+			s.sessMu.Unlock()
+			s.revokeSessionsExcept(c.Value)
+		}
+		okJSON(w, map[string]interface{}{"username": body.New})
 	case "password":
 		if r.Method != "POST" {
 			errJSON(w, 405, "method")

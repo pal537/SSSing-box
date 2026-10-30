@@ -1,11 +1,11 @@
-# sssingbox
+# SSSing-box
 
 单页面代理面板：一个页面管全部节点，基于 sing-box 内核，支持 12 种协议。
 
 ## 一键安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pal537/sssingbox/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash
 ```
 
 装完直接打印面板地址、账号、密码（自动生成，不用打开初始化页面）。也可以自定义：
@@ -35,7 +35,7 @@ sssingbox sub           # 订阅链接
 sssingbox admin reset   # 重置管理员密码
 ```
 
-装完就能用 `sssingbox` 命令（安装器已写好 CLI 凭证）；面板里改过密码后跑 `sssingbox login` 重新保存。
+装完就能用 `sssingbox` 命令（安装器已写好 CLI 凭证）；面板里改过账号或密码后跑 `sssingbox login` 重新保存。
 
 ## 卸载
 

@@ -121,6 +121,36 @@ func (s *Store) UpdatePassword(username, passHash string) error {
 	return err
 }
 
+// RenameUser 改账号名。调用方先保证新名不存在；影响 0 行说明旧账号不存在。
+func (s *Store) RenameUser(old, new string) error {
+	res, err := s.db.Exec("UPDATE users SET username=? WHERE username=?", new, old)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("账号 %s 不存在", old)
+	}
+	return nil
+}
+
+// ListUsers 按创建时间列出全部账号（面板只有一个管理员时就是一个）。
+func (s *Store) ListUsers() []string {
+	rows, err := s.db.Query("SELECT username FROM users ORDER BY id")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err == nil {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
 // ---- inbounds ----
 
 type Inbound struct {

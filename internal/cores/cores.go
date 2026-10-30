@@ -40,7 +40,7 @@ func Defs() []CoreDef {
 	// 已装旧核的更新检查也随之下线。
 	// 顺序即卡片顺序：sing-box 在上（主内核），MTProto 在下。
 	return []CoreDef{
-		{Name: "sing-box", Title: "sing-box", Repo: "SagerNet/sing-box", BinName: "sing-box",
+		{Name: "sing-box", Title: "Sing-box", Repo: "SagerNet/sing-box", BinName: "sing-box",
 			AssetSub: func(arch string) string { return "linux-" + arch }},
 		{Name: "mtg", Title: "MTProto", Repo: "9seconds/mtg", BinName: "mtg",
 			AssetSub: func(arch string) string { return "linux-" + arch }},
@@ -204,6 +204,42 @@ func repoNameToCore(repo string) string {
 type Manager struct {
 	Dir string // data dir; cores live in Dir/cores
 	mu  sync.Mutex
+	// 安装进度：名字 -> downloading/installing。单独一把锁，
+	// 绝不能复用 mu——Install 安装时全程占着 mu，进度查询要是也
+	// 等 mu，就永远查不到进行中的阶段，前端按钮又会没反馈。
+	progMu sync.Mutex
+	prog   map[string]string
+}
+
+// PanelRepo：面板自己的 GitHub 仓库。MTG 编译版存货就发在这里的
+// Release 里（mtg-v1-stock + mtg-v1-stock.version），老 CPU 机器
+// 本地没存货时从这里下载，不再直接报“没有编译版存货”。
+const PanelRepo = "pal537/SSSing-box"
+
+func (m *Manager) setProgress(name, phase string) {
+	m.progMu.Lock()
+	defer m.progMu.Unlock()
+	if m.prog == nil {
+		m.prog = map[string]string{}
+	}
+	m.prog[name] = phase
+}
+
+func (m *Manager) clearProgress(name string) {
+	m.progMu.Lock()
+	defer m.progMu.Unlock()
+	delete(m.prog, name)
+}
+
+// Progress 返回一份当前安装进度的快照，供 /api/cores/progress 用。
+func (m *Manager) Progress() map[string]string {
+	m.progMu.Lock()
+	defer m.progMu.Unlock()
+	out := map[string]string{}
+	for k, v := range m.prog {
+		out[k] = v
+	}
+	return out
 }
 
 func NewManager(dir string) *Manager {
@@ -221,9 +257,104 @@ func (m *Manager) BinPath(name string) string {
 // InstallStockMTG installs the compiled mtg build shipped in the data dir
 // (cores/mtg-v1-stock + cores/mtg-v1-stock.version). Used on old amd64
 // CPUs that cannot run the official mtg release (x86-64-v3 required).
+// DownloadStockMTG：从面板自己的 GitHub Release 下载编译版存货
+// （mtg-v1-stock + mtg-v1-stock.version）到 cores/，供老 CPU 机器用。
+// 本地已有存货时直接返回存货版本，不重复下载。
+func (m *Manager) DownloadStockMTG() (string, error) {
+	stock := filepath.Join(m.Dir, "cores", "mtg-v1-stock")
+	if fi, err := os.Stat(stock); err == nil && !fi.IsDir() && fi.Size() > 0 {
+		if verB, err := os.ReadFile(filepath.Join(m.Dir, "cores", "mtg-v1-stock.version")); err == nil && strings.TrimSpace(string(verB)) != "" {
+			return strings.TrimSpace(string(verB)), nil
+		}
+	}
+	rels, err := ListReleases(PanelRepo)
+	if err != nil {
+		return "", err
+	}
+	var stockURL, verURL string
+	for _, r := range rels {
+		for _, a := range r.Assets {
+			parts := strings.SplitN(a, "|", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			if parts[0] == "mtg-v1-stock" {
+				stockURL = parts[1]
+			}
+			if parts[0] == "mtg-v1-stock.version" {
+				verURL = parts[1]
+			}
+		}
+		if stockURL != "" {
+			break
+		}
+	}
+	if stockURL == "" {
+		return "", fmt.Errorf("面板 Release 里没有 mtg-v1-stock 存货")
+	}
+	dl := func(url, dest string) error {
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("User-Agent", "sssingbox-panel")
+		resp, err := (&http.Client{Timeout: 10 * time.Minute}).Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("download %d", resp.StatusCode)
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024*1024+1))
+		if err != nil {
+			return err
+		}
+		if len(data) == 0 {
+			return fmt.Errorf("下载到空文件")
+		}
+		return os.WriteFile(dest, data, 0755)
+	}
+	if err := dl(stockURL, stock+".new"); err != nil {
+		return "", err
+	}
+	if err := os.Rename(stock+".new", stock); err != nil {
+		return "", err
+	}
+	ver := ""
+	if verURL != "" {
+		verB, err := func() ([]byte, error) {
+			req, _ := http.NewRequest("GET", verURL, nil)
+			req.Header.Set("User-Agent", "sssingbox-panel")
+			resp, err := (&http.Client{Timeout: time.Minute}).Do(req)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return nil, fmt.Errorf("download %d", resp.StatusCode)
+			}
+			return io.ReadAll(io.LimitReader(resp.Body, 1024))
+		}()
+		if err == nil {
+			ver = strings.TrimSpace(string(verB))
+		}
+	}
+	if ver == "" {
+		ver = "v2.2.8"
+	}
+	_ = os.WriteFile(filepath.Join(m.Dir, "cores", "mtg-v1-stock.version"), []byte(ver), 0644)
+	return ver, nil
+}
+
+// HasStockMTG：cores/ 里有没有可用的编译版存货。
+func (m *Manager) HasStockMTG() bool {
+	fi, err := os.Stat(filepath.Join(m.Dir, "cores", "mtg-v1-stock"))
+	return err == nil && !fi.IsDir() && fi.Size() > 0
+}
+
 func (m *Manager) InstallStockMTG() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.setProgress("mtg", "installing")
+	defer m.clearProgress("mtg")
 	stock := filepath.Join(m.Dir, "cores", "mtg-v1-stock")
 	binData, err := os.ReadFile(stock)
 	if err != nil {
@@ -316,6 +447,8 @@ func (m *Manager) Install(name, version string) (string, error) {
 	// 安装串行化：两个并发安装会共用 dest.new，互相覆盖。
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.setProgress(name, "downloading")
+	defer m.clearProgress(name)
 	// arch() 把非 arm64 一律当 amd64：386/armv7 等机器会下错
 	// 包、装完跑不起来。面板只发这两个架构，先拦住。
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
@@ -382,6 +515,8 @@ func (m *Manager) Install(name, version string) (string, error) {
 	if n > maxDownload {
 		return "", fmt.Errorf("下载超过 512MB 上限，疑似异常响应")
 	}
+	// 下载完、解压写入开始：前端按钮从“下载中”翻成“安装中”。
+	m.setProgress(name, "installing")
 
 	lower := strings.ToLower(assetName)
 	var binData []byte

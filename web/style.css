@@ -31,6 +31,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px 2px}
 .topbar-in{max-width:1080px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;gap:28px}
 .logo{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
 .logo-mark{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.logo-mark svg{width:62%;height:62%;display:block}
 .nav{display:flex;gap:4px}
 .nav button{position:relative;border:0;background:transparent;color:var(--mut);font-size:14px;padding:8px 14px;border-radius:10px;transition:color .25s,background .25s,transform .25s}
 .nav button::after{content:"";position:absolute;left:14px;right:14px;bottom:3px;height:2px;border-radius:2px;background:var(--blue);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
