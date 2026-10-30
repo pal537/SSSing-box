@@ -216,6 +216,9 @@ func Run(args []string) int {
 	}
 	// 子命令后的 flag（如 yizhan node add -protocol vless）由各子命令自己再解析，
 	// 这里只把 -data/-port 摘出来，其余原样留给子命令。
+	// 例外：node add 自带 -port（节点监听端口，0=自动分配），不能被当成面板端口摘走，
+	// 否则 yizhan node add -port 0 会去连面板 0 端口。node add 的面板端口固定走默认 18081。
+	isNodeAdd := len(args) >= 2 && args[0] == "node" && args[1] == "add"
 	dataDir := "/var/lib/yizhan"
 	port := 18081
 	var rest []string
@@ -225,10 +228,10 @@ func Run(args []string) int {
 			i++
 		} else if strings.HasPrefix(args[i], "-data=") {
 			dataDir = strings.TrimPrefix(args[i], "-data=")
-		} else if args[i] == "-port" && i+1 < len(args) {
+		} else if args[i] == "-port" && i+1 < len(args) && !isNodeAdd {
 			port, _ = strconv.Atoi(args[i+1])
 			i++
-		} else if strings.HasPrefix(args[i], "-port=") {
+		} else if strings.HasPrefix(args[i], "-port=") && !isNodeAdd {
 			port, _ = strconv.Atoi(strings.TrimPrefix(args[i], "-port="))
 		} else {
 			rest = append(rest, args[i])
