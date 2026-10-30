@@ -1,0 +1,13 @@
+# 面板运行数据（绝不进仓库）
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.cli-credentials
+admin.txt
+# 构建产物
+/yizhan
+yizhan-linux-*.tar.gz
+*.bak-*
+.DS_Store

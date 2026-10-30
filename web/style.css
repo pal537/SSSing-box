@@ -1,0 +1,220 @@
+:root{
+  --bg1:#eaf4ff; --bg2:#d9ecff; --card:rgba(255,255,255,.68); --line:rgba(255,255,255,.9);
+  --line2:#dbeafe; --txt:#1e293b; --mut:#64748b; --mut2:#94a3b8;
+  --blue:#2563eb; --blue2:#3b82f6; --sky:#38bdf8; --green:#22a06b; --red:#d43a2f; --amber:#b45309;
+  --shadow:0 4px 18px rgba(37,99,235,.08); --shadow2:0 16px 40px rgba(37,99,235,.18);
+  --r:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 46%,#eef7ff 100%);
+  background-attachment:fixed;
+  color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--txt);background:rgba(255,255,255,.85);border:1px solid var(--line2);border-radius:12px;padding:9px 12px;outline:none;transition:border-color .2s,box-shadow .2s,transform .2s;width:100%}
+/* 复选框/单选框不能吃 width:100%：订阅弹窗的节点行是 flex 行，
+   勾选框占满整行会把后面的节点名挤到 0 宽（文字 overflow:hidden，
+   看起来就是只有居中的勾选框、没有名字）。
+   注意：.switch 开关要排除在外——它的宽 40px 来自 .switch 自己的
+   规则，而这条规则的选择器比 .switch 更强，之前把开关压扁到
+   几乎 0 宽，圆钮溢出来压住了链式行的名字。 */
+input[type=checkbox]:not(.switch),input[type=radio]{width:auto;flex:none;padding:0}
+input:focus,select:focus,textarea:focus{border-color:var(--blue2);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
+textarea{resize:vertical;min-height:84px}
+label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px 2px}
+::placeholder{color:var(--mut2)}
+
+/* top bar: glass + animated nav */
+.topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.72);backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3);border-bottom:1px solid rgba(255,255,255,.9);box-shadow:0 2px 16px rgba(37,99,235,.06)}
+.topbar-in{max-width:1080px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;gap:28px}
+.logo{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.logo-mark{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.nav{display:flex;gap:4px}
+.nav button{position:relative;border:0;background:transparent;color:var(--mut);font-size:14px;padding:8px 14px;border-radius:10px;transition:color .25s,background .25s,transform .25s}
+.nav button::after{content:"";position:absolute;left:14px;right:14px;bottom:3px;height:2px;border-radius:2px;background:var(--blue);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.nav button:hover{color:var(--blue);background:rgba(219,234,254,.7);transform:translateY(-1px)}
+.nav button:hover::after{transform:scaleX(1)}
+.nav button.on{color:var(--blue);background:rgba(219,234,254,.9);font-weight:600}
+.nav button.on::after{transform:scaleX(1)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.icon-btn{border:1px solid var(--line2);background:rgba(255,255,255,.8);color:var(--mut);border-radius:10px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:all .25s}
+.icon-btn:hover{color:var(--blue);border-color:var(--blue2);transform:translateY(-1px) rotate(20deg)}
+.wrap{max-width:1080px;margin:0 auto;padding:22px 20px 60px}
+.view{display:none;animation:fadeUp .3s ease}
+.view.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* cards: glass, every module lifts on hover */
+.card{background:var(--card);backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px;margin-bottom:16px;transition:transform .25s ease,box-shadow .25s ease}
+.card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,99,235,.14)}
+.card h3{margin:0 0 12px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card h3 .sub{font-size:12px;color:var(--mut);font-weight:400}
+.card h3 .head-actions{display:flex;gap:8px;flex:none}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+.cols2 .card{margin-bottom:0;height:100%;display:flex;flex-direction:column}
+/* 首页底部的订阅卡：cols2 里的卡片 margin-bottom 是 0，所以这里补
+   一个标准 16px 上间距，和其他卡片之间的间距保持一致。 */
+.sub-card{margin-top:16px}
+@media(max-width:860px){.cols2{grid-template-columns:1fr}.cols2 .card{margin-bottom:16px;height:auto}.sub-card{margin-top:0}}
+.traffic-scroll{max-height:216px;overflow-y:auto;padding-right:2px}
+.scroll-more{display:block;width:100%;border:0;background:transparent;color:var(--blue);font-size:13px;padding:8px 0 2px;transition:color .2s}
+.scroll-more:hover{color:var(--blue2)}
+
+/* server status: compact, rings left, text info right */
+.sys-flex{display:flex;gap:24px;align-items:center}
+.sys-rings{flex:1}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:860px){.grid4{grid-template-columns:repeat(2,1fr)}.sys-flex{flex-direction:column;align-items:stretch}.sys-info{border-left:0;border-top:1px solid var(--line2);padding:10px 0 0}}
+.sys-info{flex:none;width:210px;border-left:1px solid var(--line2);padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--mut)}
+.sys-info b{color:var(--txt);font-weight:600}
+/* IPv6 一串 39 字符，210px 栏位放不下会捅出卡片：允许在任意处换行，
+   宁可折两行也不许超出。IP 点一下就复制（见 index.html 的 onclick）。 */
+.sys-info b{overflow-wrap:anywhere}
+.ip-copy{cursor:pointer}
+.ring-wrap{text-align:center;padding:2px 0}
+.ring{position:relative;width:76px;height:76px;margin:0 auto}
+.ring svg{transform:rotate(-90deg)}
+.ring .bg{stroke:#e2efff}
+.ring .fg{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset .8s ease}
+.ring .fg.warn{stroke:#d97706}
+.ring .fg.bad{stroke:var(--red)}
+.ring .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.ring-wrap .cap{margin-top:6px;font-size:12px;color:var(--mut)}
+.ring-wrap .cap b{display:block;color:var(--txt);font-size:11px;font-weight:500;margin-top:2px}
+.kv{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:13px;color:var(--mut)}
+.kv b{color:var(--txt);font-weight:600}
+.divider{height:1px;background:var(--line2);margin:12px 0}
+
+/* buttons */
+.btn{border:0;border-radius:11px;padding:9px 18px;font-size:14px;font-weight:600;transition:all .25s;background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.25)}
+.btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:rgba(255,255,255,.85);color:var(--txt);border:1px solid var(--line2);box-shadow:none}
+.btn.ghost:hover{border-color:var(--blue2);background:#fff;color:var(--blue)}
+.btn.green{background:var(--green);box-shadow:0 4px 14px rgba(34,160,107,.25)}
+.btn.red{background:var(--red);box-shadow:0 4px 14px rgba(212,58,47,.25)}
+.btn.small{padding:6px 12px;font-size:13px;border-radius:9px}
+.btn:disabled{opacity:.55;cursor:default;transform:none}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;vertical-align:middle;flex:none}
+.dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(34,160,107,.18)}
+.dot.off{background:var(--mut2)}
+.badge{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;background:#dbeafe;color:var(--blue);font-weight:600}
+.badge.hy2{background:#dcfce7;color:#15803d}
+.badge.mtg{background:#fce7f3;color:#be185d}
+.badge.grey{background:#f1f5f9;color:var(--mut)}
+
+/* rows */
+.row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid var(--line2)}
+.row:first-of-type{border-top:0;padding-top:2px}
+.row:last-child{padding-bottom:2px}
+.row .grow{flex:1;min-width:0}
+.row .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s2{font-size:12px;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 内核行的说明不许截断：sing-box 那句原来被省略号切掉了，用户根本看不到。 */
+.core-row .s{white-space:normal}
+.row .nums{text-align:right;font-size:12px;color:var(--mut);line-height:1.7;white-space:nowrap}
+.row .nums b{color:var(--txt)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;word-break:break-all}
+.muted{color:var(--mut);font-size:13px}
+.empty{padding:22px 0;text-align:center;color:var(--mut)}
+.mini-head{display:flex;gap:12px;padding:0 2px 8px;font-size:12px;color:var(--mut)}
+
+/* node list rows (3x-ui style): menu | switch | name | port | protocol | today | total */
+.nrow{display:grid;grid-template-columns:28px 42px minmax(0,1fr) 74px 86px 150px 150px;gap:10px;align-items:center;padding:12px 2px;border-top:1px solid var(--line2)}
+.nrow:first-of-type{border-top:0}
+.nrow .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .s{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .cell{font-size:12px;color:var(--mut);white-space:nowrap}
+.nrow .cell b{color:var(--txt)}
+.menu-btn{border:1px solid var(--line2);background:rgba(255,255,255,.85);border-radius:9px;width:28px;height:28px;padding:0;font-size:16px;line-height:1;color:var(--mut);transition:all .2s}
+.menu-btn:hover{color:var(--blue);border-color:var(--blue2);transform:translateY(-1px)}
+.menu-list button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line2);background:transparent;padding:12px 4px;font-size:14px;color:var(--txt);transition:background .2s,color .2s}
+.menu-list button:last-child{border-bottom:0}
+.menu-list button:hover{background:rgba(219,234,254,.6);color:var(--blue)}
+.menu-list button.danger{color:var(--red)}
+@media(max-width:860px){
+  .nrow{grid-template-columns:28px 42px minmax(0,1fr) 74px;grid-template-rows:auto auto}
+  .nrow .cell.hide-m{display:none}
+  .mini-head .hide-m{display:none}
+  .mini-head{flex-wrap:wrap}
+}
+
+/* forms */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+.form-grid .full{grid-column:1/-1}
+/* 链式表单：A/B 两列用 subgrid 对齐——标签行、选择框行、说明行
+   各自同高，标签换几行选择框都齐平。之前垫 min-height 的办法
+   标签一超两行就崩，这次改结构对齐，不再依赖行数。
+   min-height 留着给不支持 subgrid 的旧浏览器兜底。 */
+.chain-form label{min-height:44px}
+.chain-form select{height:42px}
+.chain-form > div{display:grid;grid-template-rows:subgrid;grid-row:span 3}
+.chain-form > div.full{display:block}
+@media(max-width:640px){.form-grid{grid-template-columns:1fr}}
+@media(max-width:640px){
+  .topbar-in{gap:12px;padding:0 12px}
+  .nav button{white-space:nowrap;padding:8px 10px;font-size:13px}
+  .card h3{flex-wrap:wrap}
+  .row{flex-wrap:wrap}
+  .row .grow{flex:1 1 calc(100% - 20px)}
+  .row .nums{margin-left:auto}
+}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1}
+.input-row .btn{flex:none}
+.hint{font-size:12px;color:var(--mut);margin-top:6px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.ping{font-size:12px;color:var(--mut);white-space:nowrap}
+.tabs button{position:relative;border:1px solid var(--line2);background:rgba(255,255,255,.85);color:var(--mut);border-radius:11px;padding:8px 18px;font-size:14px;font-weight:600;transition:all .25s}
+/* 优先推荐的协议，页签右上角打星号（VLESS / Hysteria2）。 */
+.tabs button .tab-star{position:absolute;top:1px;right:5px;font-size:11px;line-height:1;color:#f59e0b;pointer-events:none}
+.tabs button:hover{color:var(--blue);transform:translateY(-1px)}
+.tabs button.on{background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(37,99,235,.25)}
+details.adv{border:1px dashed var(--line2);border-radius:12px;padding:12px 14px;margin-top:4px;background:rgba(255,255,255,.4)}
+details.adv summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--mut);list-style:none}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary:before{content:"＋ ";color:var(--blue)}
+details.adv[open ] summary:before{content:"－ "}
+details.adv .form-grid{margin-top:14px}
+.switch{position:relative;width:40px;height:22px;flex:none;appearance:none;background:#dbe2ec;border-radius:99px;outline:none;cursor:pointer;transition:background .2s,transform .2s;padding:0;border:0}
+.switch:checked{background:var(--green)}
+.switch:hover{transform:scale(1.06)}
+.switch:after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch:checked:after{left:20px}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(30,64,175,.22);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.on{display:flex}
+.modal{background:rgba(255,255,255,.88);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border:1px solid rgba(255,255,255,.95);border-radius:20px;box-shadow:var(--shadow2);width:100%;max-width:520px;max-height:86vh;overflow:auto;padding:22px;animation:pop .22s ease}
+.modal.wide{max-width:640px}
+@keyframes pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal h4{margin:0 0 14px;font-size:16px}
+.modal .foot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.modal .msg{font-size:13px;margin-top:12px;min-height:18px}
+.modal .msg.err{color:var(--red)}
+.modal .msg.ok{color:var(--green)}
+.ver-list{max-height:280px;overflow:auto;border:1px solid var(--line2);border-radius:12px;background:rgba(255,255,255,.7)}
+.ver-list button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line2);background:transparent;padding:11px 14px;font-size:14px;transition:background .2s}
+.ver-list button:last-child{border-bottom:0}
+.ver-list button:hover{background:rgba(219,234,254,.7)}
+.ver-list button.sel{background:#dbeafe;color:var(--blue);font-weight:700}
+.qr-box{text-align:center;padding:8px 0}
+.qr-box img{width:220px;height:220px;border:1px solid var(--line2);border-radius:12px;background:#fff}
+pre.log{background:#0f172a;color:#dbe4f0;border-radius:12px;padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:340px;white-space:pre-wrap;word-break:break-all}
+
+/* toast */
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-16px);background:#1e293b;color:#fff;padding:11px 22px;border-radius:99px;font-size:14px;z-index:200;opacity:0;pointer-events:none;transition:all .25s;box-shadow:var(--shadow2);max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--red)}
+
+/* login / setup */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:rgba(255,255,255,.75);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border:1px solid rgba(255,255,255,.95);border-radius:22px;box-shadow:var(--shadow2);width:100%;max-width:380px;padding:30px 28px;text-align:center}
+.login-card .logo-mark{width:48px;height:48px;font-size:22px;border-radius:14px;margin:0 auto 14px}
+.login-card h1{font-size:20px;margin:0 0 4px}
+.login-card p{color:var(--mut);font-size:13px;margin:0 0 22px}
+.login-card .field{text-align:left;margin-bottom:14px}
+.login-card .err{color:var(--red);font-size:13px;min-height:18px;margin-top:10px}

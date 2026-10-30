@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>驿站 · 多协议代理面板</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- first-run setup -->
+<div id="setupView" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <div class="logo-mark">驿</div>
+    <h1>欢迎使用驿站</h1>
+    <p>首次打开，先设置一个管理员账号</p>
+    <div class="field"><label>用户名</label><input id="setupUser" value="admin" autocomplete="username"></div>
+    <div class="field"><label>密码（至少 6 位）</label><input id="setupPass" type="password" autocomplete="new-password"></div>
+    <div class="field"><label>再输一次密码</label><input id="setupPass2" type="password" autocomplete="new-password"></div>
+    <button class="btn" style="width:100%" onclick="doSetup()">创建管理员并进入</button>
+    <div class="err" id="setupErr"></div>
+  </div>
+</div>
+
+<!-- login -->
+<div id="loginView" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <div class="logo-mark">驿</div>
+    <h1>驿站</h1>
+    <p>多协议代理面板</p>
+    <div class="field"><label>账号</label><input id="loginUser" value="admin" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input id="loginPass" type="password" autocomplete="current-password"></div>
+    <button class="btn" style="width:100%" onclick="doLogin()">登录</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- app -->
+<div id="appView" style="display:none">
+  <div class="topbar"><div class="topbar-in">
+    <div class="logo"><span class="logo-mark">驿</span>驿站</div>
+    <nav class="nav">
+      <button data-view="status" class="on" onclick="showView('status')">系统状态</button>
+      <button data-view="inbounds" onclick="showView('inbounds')">入站列表</button>
+      <button data-view="settings" onclick="showView('settings')">面板设置</button>
+    </nav>
+    <div class="nav-right">
+      <button class="icon-btn" title="刷新" onclick="refreshAll()">↻</button>
+      <button class="icon-btn" title="退出登录" onclick="doLogout()">⎋</button>
+    </div>
+  </div></div>
+
+  <div class="wrap">
+    <!-- ===== 系统状态 ===== -->
+    <div id="view-status" class="view on">
+      <div class="card">
+        <h3>服务器状态 <span class="sub" id="sysSub"></span></h3>
+        <div class="sys-flex">
+          <div class="sys-rings">
+            <div class="grid4">
+              <div class="ring-wrap"><div class="ring" id="ringCpu"></div><div class="cap">CPU <b id="capCpu"></b></div></div>
+              <div class="ring-wrap"><div class="ring" id="ringMem"></div><div class="cap">内存 <b id="capMem"></b></div></div>
+              <div class="ring-wrap"><div class="ring" id="ringSwap"></div><div class="cap">交换分区 <b id="capSwap"></b></div></div>
+              <div class="ring-wrap"><div class="ring" id="ringDisk"></div><div class="cap">存储 <b id="capDisk"></b></div></div>
+            </div>
+          </div>
+          <div class="sys-info">
+            <span>系统负载 <b id="kvLoad">-</b></span>
+            <span>系统运行 <b id="kvUptime">-</b></span>
+            <span>面板内存 <b id="kvPanelMem">-</b></span>
+            <span>公网 IP <b id="kvPubIp" class="ip-copy" title="点击复制" onclick="copyText('',this.textContent)">-</b></span>
+            <span id="kvPubIp6Row">公网 IPv6 <b id="kvPubIp6" class="ip-copy" title="点击复制" onclick="copyText('',this.textContent)">-</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cols2">
+        <div class="card">
+          <h3>内核 <span class="sub">面板本身不带内核，在这里下载；更新要点开选版本。sing-box 是全部非 MTG 节点的主内核，MTProto 走独立的 mtg 内核</span></h3>
+          <div id="coreRows"></div>
+        </div>
+
+        <div class="card">
+          <h3>实时 · 用量 <span class="sub">每 5 秒刷新 · 只看不改</span></h3>
+          <div class="kv">
+            <span>整体上传 <b id="rtUp">-</b></span>
+            <span>整体下载 <b id="rtDown">-</b></span>
+            <span>TCP 连接 <b id="rtTcp">-</b></span>
+            <span>UDP 会话 <b id="rtUdp">-</b></span>
+          </div>
+          <div class="divider"></div>
+          <div class="traffic-scroll" id="trafficScroll"><div id="trafficRows"></div></div>
+          <button class="scroll-more" id="trafficMore" style="display:none" onclick="scrollTraffic()">↓ 更多节点</button>
+          <div class="divider"></div>
+          <div class="kv">
+            <span>今日合计 <b id="totToday">-</b></span>
+            <span>本月合计 <b id="totMonth">-</b></span>
+            <span>总计 <b id="totAll">-</b></span>
+          </div>
+          <div class="muted" id="statsErr" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <div class="card sub-card">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <h3 style="margin:0">订阅</h3>
+            <div class="muted" style="margin-top:4px">订阅默认包含全部节点，base64 链接列表。点开弹窗可以勾选节点、保存生效，也可以复制、更换链接；要加其他服务器的节点，去入站列表的“其他节点”里加。</div>
+          </div>
+          <button class="btn" style="flex:none" onclick="openSubModal()">订阅配置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 入站列表 ===== -->
+    <div id="view-inbounds" class="view">
+      <div style="margin-bottom:16px">
+        <button class="btn" onclick="openAddModal()">＋ 添加入站</button>
+      </div>
+
+      <div class="card">
+        <h3>本地节点 <span class="sub" id="localSub"></span></h3>
+        <div class="mini-head">
+          <span style="width:28px"></span><span style="width:42px"></span>
+          <span style="flex:1">节点</span><span style="width:74px">端口</span>
+          <span style="width:86px">协议</span><span class="hide-m" style="width:150px">今日流量</span>
+          <span class="hide-m" style="width:150px">累计流量</span>
+        </div>
+        <div id="localRows"></div>
+      </div>
+
+      <div class="card">
+        <h3>其他节点 <span class="sub">手动添加的其他服务器节点，可做链式 B 节点，也进订阅</span>
+          <span class="head-actions"><button class="btn ghost small" onclick="openAddBNodeModal()">＋ 添加其他节点</button></span></h3>
+        <div id="bnodeRows"></div>
+      </div>
+
+      <div class="card">
+        <h3>链式代理 <span class="sub">清单里的域名或 IP 走 B 节点落地，其余直连 · 一个 A 节点只能有一条链式</span>
+          <span class="head-actions"><button class="btn ghost small" onclick="openChainModal()">＋ 添加链式</button></span></h3>
+        <div id="chainRows"></div>
+      </div>
+    </div>
+
+    <!-- ===== 面板设置 ===== -->
+    <div id="view-settings" class="view">
+      <div class="card">
+        <h3>面板登录</h3>
+        <div class="form-grid">
+          <div><label>旧密码</label><input id="pwOld" type="password"></div>
+          <div><label>新密码（至少 6 位）</label><input id="pwNew" type="password"></div>
+          <div><label>再输一次新密码</label><input id="pwNew2" type="password"></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changePassword()">修改密码</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>面板域名和证书</h3>
+        <div class="form-grid">
+          <div class="full"><label>面板的域名和证书：证书域名就是面板域名，节点链接和订阅默认用它。默认 HTTP，选一张证书并启用 HTTPS 才变。</label>
+            <div class="input-row"><button class="btn small" onclick="openManualCertDialog()">手动添加证书</button><button class="btn small" onclick="openAcmeDialog()">在线申请证书</button></div>
+            <div class="hint" id="panelCertList"></div>
+            <div class="input-row" style="margin-top:8px"><select id="panelHttpsCert"></select><button class="btn small" onclick="savePanelHttps(true)">启用 HTTPS</button><button class="btn ghost small" onclick="savePanelHttps(false)">关闭 HTTPS</button></div>
+            <div class="hint" id="panelHttpsHint"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
