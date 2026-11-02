@@ -188,3 +188,58 @@ fi
 echo "SSH 管理：sssingbox menu（交互菜单，不用打开面板就能建节点）"
 echo "卸载：curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash -s uninstall（数据目录保留）"
 echo "=============================================="
+
+# 安装后改账号/密码：刚建好管理员且能交互时才出现。管道安装（curl | bash）
+# 的 stdin 是脚本本身，不能直接 read，改走 /dev/tty；无终端时自动跳过。
+json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+if [ "$SETUP_OK" = "1" ] && [ -r /dev/tty ]; then
+	JAR="$(mktemp)"
+	if curl -s --max-time 10 -c "$JAR" -X POST "http://127.0.0.1:$PORT/api/login" \
+		-H 'Content-Type: application/json' \
+		-d "{\"username\":\"$(json_escape "$USER_NAME")\",\"password\":\"$(json_escape "$PASS")\"}" | grep -q '"ok":true'; then
+		while true; do
+			echo ""
+			echo "是否修改登录账号/密码？（当前账号：$USER_NAME）"
+			echo "  1) 修改账号  2) 修改密码  3) 结束安装"
+			printf "请选择 [1/2/3]："
+			read -r CHOICE < /dev/tty || CHOICE="3"
+			case "$CHOICE" in
+			1)
+				printf "新账号："
+				read -r NEW_USER < /dev/tty || NEW_USER=""
+				if [ -z "$NEW_USER" ]; then echo "新账号不能为空"; continue; fi
+				if curl -s --max-time 10 -b "$JAR" -X POST "http://127.0.0.1:$PORT/api/settings/username" \
+					-H 'Content-Type: application/json' \
+					-d "{\"new\":\"$(json_escape "$NEW_USER")\"}" | grep -q '"ok":true'; then
+					USER_NAME="$NEW_USER"
+					echo "账号已改为 $USER_NAME"
+				else
+					echo "修改失败：新账号为空、含空格、超 32 位或已存在"
+				fi
+				;;
+			2)
+				printf "新密码："
+				read -rs NEW_PASS < /dev/tty || NEW_PASS=""; echo ""
+				printf "再输一次："
+				read -rs NEW_PASS2 < /dev/tty || NEW_PASS2=""; echo ""
+				if [ "$NEW_PASS" != "$NEW_PASS2" ]; then echo "两次输入不一致"; continue; fi
+				if [ "${#NEW_PASS}" -lt 6 ]; then echo "新密码至少 6 位"; continue; fi
+				if curl -s --max-time 10 -b "$JAR" -X POST "http://127.0.0.1:$PORT/api/settings/password" \
+					-H 'Content-Type: application/json' \
+					-d "{\"new\":\"$(json_escape "$NEW_PASS")\",\"new2\":\"$(json_escape "$NEW_PASS2")\"}" | grep -q '"ok":true'; then
+					PASS="$NEW_PASS"
+					echo "密码已修改"
+				else
+					echo "修改失败"
+				fi
+				;;
+			3) break ;;
+			*) echo "请输入 1、2 或 3" ;;
+			esac
+		done
+		echo ""
+		echo "面板地址：http://$IP:$PORT/"
+		echo "面板账号：$USER_NAME"
+	fi
+	rm -f "$JAR"
+fi

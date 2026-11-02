@@ -30,6 +30,7 @@
     <p>多协议代理面板</p>
     <div class="field"><label>账号</label><input id="loginUser" autocomplete="username"></div>
     <div class="field"><label>密码</label><input id="loginPass" type="password" autocomplete="current-password"></div>
+    <div class="field"><label><input type="checkbox" id="loginRemember" checked> 记住登录（30 天）</label></div>
     <button class="btn" style="width:100%" onclick="doLogin()">登录</button>
     <div class="err" id="loginErr"></div>
   </div>
@@ -162,7 +163,6 @@
           <div><label>当前账号</label><input id="curUser" readonly></div>
           <div><label>新账号</label><input id="newUser" placeholder="留空不改"></div>
           <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changeUsername()">修改账号</button></div>
-          <div><label>旧密码</label><input id="pwOld" type="password"></div>
           <div><label>新密码（至少 6 位）</label><input id="pwNew" type="password"></div>
           <div><label>再输一次新密码</label><input id="pwNew2" type="password"></div>
           <div style="display:flex;align-items:flex-end"><button class="btn ghost small" onclick="changePassword()">修改密码</button></div>

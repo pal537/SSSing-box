@@ -285,6 +285,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Remember bool   `json:"remember"`
 	}
 	if err := s.readJSON(r, &body); err != nil {
 		errJSON(w, 400, "请求格式不对")
@@ -295,11 +296,19 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 401, "账号或密码不对")
 		return
 	}
+	// 记住登录：会话与 cookie 一起延长到 30 天（不绑 IP：出口 IP 会变，
+	// 绑 IP 反而把人踢下线）；不勾则保持 24 小时。
+	exp := time.Now().Add(24 * time.Hour)
+	maxAge := 86400
+	if body.Remember {
+		exp = time.Now().Add(30 * 24 * time.Hour)
+		maxAge = 30 * 86400
+	}
 	tok := randToken()
 	s.sessMu.Lock()
-	s.sessions[tok] = session{username: body.Username, exp: time.Now().Add(24 * time.Hour)}
+	s.sessions[tok] = session{username: body.Username, exp: exp}
 	s.sessMu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
 	okJSON(w, map[string]interface{}{"username": body.Username})
 }
 
@@ -2771,23 +2780,22 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var body struct {
-			Old string `json:"old"`
-			New string `json:"new"`
+			New  string `json:"new"`
+			New2 string `json:"new2"`
 		}
 		if err := s.readJSON(r, &body); err != nil {
 			errJSON(w, 400, "请求格式不对")
 			return
 		}
-		// 按当前登录用户查改（以前写死 admin，非 admin 初始用户永远改不了），
+		// 改密码不再验旧密码：会话本身就是登录凭证，填新密码两遍即可。
 		// 成功后吊销该用户在其他地方的全部会话，偷来的旧会话立即失效。
 		username, ok := s.sessionUser(r)
 		if !ok || username == "" {
 			errJSON(w, 401, "未登录")
 			return
 		}
-		hash, err := s.app.Store.GetUser(username)
-		if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(body.Old)) != nil {
-			errJSON(w, 401, "旧密码不对")
+		if body.New2 != "" && body.New2 != body.New {
+			errJSON(w, 400, "两次输入的新密码不一致")
 			return
 		}
 		if len(body.New) < 6 {

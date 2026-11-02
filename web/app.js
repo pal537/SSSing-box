@@ -135,7 +135,7 @@ async function doSetup(){
 async function doLogin(){
   $('loginErr').textContent = '';
   try {
-    await api('/api/login', 'POST', { username: $('loginUser').value.trim(), password: $('loginPass').value });
+    await api('/api/login', 'POST', { username: $('loginUser').value.trim(), password: $('loginPass').value, remember: $('loginRemember').checked });
     showApp();
   } catch(e){ $('loginErr').textContent = e.message; }
 }
@@ -1534,12 +1534,12 @@ async function pollAcmeStatus(){
   } catch(e){ el.textContent = '状态查询失败：' + e.message; }
 }
 async function changePassword(){
-  const oldP = $('pwOld').value, newP = $('pwNew').value, newP2 = $('pwNew2').value;
-  if (!oldP || !newP){ toast('旧密码和新密码都要填', true); return; }
+  const newP = $('pwNew').value, newP2 = $('pwNew2').value;
+  if (!newP){ toast('新密码不能为空', true); return; }
   if (newP !== newP2){ toast('两次输入的新密码不一致', true); return; }
   try {
-    await api('/api/settings/password', 'POST', { old: oldP, new: newP });
-    toast('密码已修改'); $('pwOld').value = ''; $('pwNew').value = ''; $('pwNew2').value = '';
+    await api('/api/settings/password', 'POST', { new: newP, new2: newP2 });
+    toast('密码已修改'); $('pwNew').value = ''; $('pwNew2').value = '';
   } catch(e){ toast(e.message, true); }
 }
 function subLinkValue(token){
