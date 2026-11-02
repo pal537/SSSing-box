@@ -1314,13 +1314,15 @@ async function loadSettings(){
   } catch(e){}
   checkUpdate(true);
 }
-async function changeUsername(){
-  const v = $('newUser').value.trim();
-  if (!v){ toast('新账号不能为空', true); return; }
+async function saveLogin(){
+  const u = $('newUser').value.trim(), p = $('pwNew').value;
+  if (!u && !p){ toast('账号和密码都留空，没有要改的内容', true); return; }
+  if (p && p.length < 6){ toast('新密码至少 6 位', true); return; }
   try {
-    const r = await api('/api/settings/username', 'POST', { new: v });
-    toast('账号已改为 ' + r.username + '，立即生效');
-    $('curUser').value = r.username; $('newUser').value = '';
+    const r = await api('/api/settings/login', 'POST', { username: u, password: p });
+    toast('已保存，立即生效');
+    if (r.username) $('curUser').value = r.username;
+    $('newUser').value = ''; $('pwNew').value = '';
   } catch(e){ toast(e.message, true); }
 }
 // ---------- 在线更新 ----------
@@ -1533,16 +1535,7 @@ async function pollAcmeStatus(){
     }
   } catch(e){ el.textContent = '状态查询失败：' + e.message; }
 }
-async function changePassword(){
-  const newP = $('pwNew').value, newP2 = $('pwNew2').value;
-  if (!newP){ toast('新密码不能为空', true); return; }
-  if (newP !== newP2){ toast('两次输入的新密码不一致', true); return; }
-  try {
-    await api('/api/settings/password', 'POST', { new: newP, new2: newP2 });
-    toast('密码已修改'); $('pwNew').value = ''; $('pwNew2').value = '';
-  } catch(e){ toast(e.message, true); }
-}
-function subLinkValue(token){
+async function subLinkValue(token){
   const scheme = location.protocol === 'https:' ? 'https' : 'http';
   const host = panelCertDomain(PANEL_CERT_ID) || location.hostname;
   const port = location.port ? ':' + location.port : '';

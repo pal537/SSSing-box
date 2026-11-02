@@ -55,6 +55,11 @@ label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px 2px}
 .card h3 .head-actions{display:flex;gap:8px;flex:none}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
 .cols2 .card{margin-bottom:0;height:100%;display:flex;flex-direction:column}
+/* 设置页上排两张卡（在线更新、面板登录）内容少，压紧：小内边距、小间距 */
+#view-settings .cols2 .card{padding:12px 14px}
+#view-settings .cols2 .card h3{margin-bottom:8px}
+#view-settings .cols2 .form-grid{gap:10px 14px}
+#view-settings .cols2 .hint{margin-top:8px}
 /* 首页底部的订阅卡：cols2 里的卡片 margin-bottom 是 0，所以这里补
    一个标准 16px 上间距，和其他卡片之间的间距保持一致。 */
 .sub-card{margin-top:16px}

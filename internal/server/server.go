@@ -2813,6 +2813,80 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 			s.revokeSessionsExcept(c.Value)
 		}
 		okJSON(w, nil)
+	case "login":
+		// 面板登录一表保存：新账号留空=不改，新密码留空=不改、只输一遍；
+		// 两项都空直接拒绝。老 username/password 接口留着（命令行、安装器在用）。
+		if r.Method != "POST" {
+			errJSON(w, 405, "method")
+			return
+		}
+		var body struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := s.readJSON(r, &body); err != nil {
+			errJSON(w, 400, "请求格式不对")
+			return
+		}
+		old, ok := s.sessionUser(r)
+		if !ok || old == "" {
+			errJSON(w, 401, "未登录")
+			return
+		}
+		body.Username = strings.TrimSpace(body.Username)
+		if body.Username == "" && body.Password == "" {
+			errJSON(w, 400, "账号和密码都留空，没有要改的内容")
+			return
+		}
+		// 先全验过再落盘，避免改完账号才发现密码不合格、改一半。
+		newName := old
+		if body.Username != "" && body.Username != old {
+			if len(body.Username) > 32 || strings.ContainsAny(body.Username, " \t\n") {
+				errJSON(w, 400, "新账号不能含空格、不能超 32 位")
+				return
+			}
+			if _, err := s.app.Store.GetUser(body.Username); err == nil {
+				errJSON(w, 400, "账号已存在")
+				return
+			}
+			newName = body.Username
+		}
+		if body.Password != "" && len(body.Password) < 6 {
+			errJSON(w, 400, "新密码至少 6 位")
+			return
+		}
+		if newName != old {
+			if err := s.app.Store.RenameUser(old, newName); err != nil {
+				errJSON(w, 500, err.Error())
+				return
+			}
+		}
+		if body.Password != "" {
+			nh, _ := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+			if err := s.app.Store.UpdatePassword(newName, string(nh)); err != nil {
+				errJSON(w, 500, err.Error())
+				return
+			}
+		}
+		// CLI 凭证同步：只传改了的那项，另一项沿用文件旧值。
+		u, p := "", ""
+		if newName != old {
+			u = newName
+		}
+		if body.Password != "" {
+			p = body.Password
+		}
+		s.syncCliCredentials(u, p)
+		if c, err := r.Cookie("sssingbox_session"); err == nil {
+			s.sessMu.Lock()
+			if sess, ok := s.sessions[c.Value]; ok {
+				sess.username = newName
+				s.sessions[c.Value] = sess
+			}
+			s.sessMu.Unlock()
+			s.revokeSessionsExcept(c.Value)
+		}
+		okJSON(w, map[string]interface{}{"username": newName})
 	case "sub-token":
 		if r.Method != "POST" {
 			errJSON(w, 405, "method")
