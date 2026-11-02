@@ -113,19 +113,24 @@ func main() {
 	srv.Shutdown()
 }
 
-// stdinIsTerminal：stdin 是不是真终端。管道、重定向、文件都不是；
-// 字符设备里只有 pts/tty 是真终端，/dev/null（systemd 默认 stdin）不是，
-// 这样裸命令在 systemd 下仍起面板，不会误进菜单。
+// stdinIsTerminal：是不是在交互终端里。两条路都认：
+// ① stdin 本身是 pts/tty（SSH 终端）；
+// ② stdin 是管道，但进程有控制终端、/dev/tty 能打开（网页终端就是这样：
+//    按键走管道进 shell，但 /dev/tty 照样能读，安装菜单就是靠它弹出来的）。
+// 两条都不满足才是真非交互（systemd 默认 stdin 是 /dev/null 且无控制终端），
+// 裸命令在那种环境下仍起面板，不会误进菜单。
 func stdinIsTerminal() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
+	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+		name := os.Stdin.Name()
+		if strings.HasPrefix(name, "/dev/pts/") || strings.HasPrefix(name, "/dev/tty") {
+			return true
+		}
 	}
-	if fi.Mode()&os.ModeCharDevice == 0 {
-		return false
+	if f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		f.Close()
+		return true
 	}
-	name := os.Stdin.Name()
-	return strings.HasPrefix(name, "/dev/pts/") || strings.HasPrefix(name, "/dev/tty")
+	return false
 }
 
 func fatal(err error) {
