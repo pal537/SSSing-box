@@ -24,20 +24,15 @@ VLESS、Hysteria2、MTProto、VMess、Shadowsocks、SOCKS5、HTTP、Trojan、Wir
 
 ## 不用面板：SSH 命令行管理
 
+直接运行一个命令就进交互菜单，所有功能都在里面，不用记一堆命令：
+
 ```bash
-sssingbox menu          # 交互菜单：选协议、填参数，自动建节点
-sssingbox node list     # 节点列表
-sssingbox node add -protocol vless -mode reality   # 命令行建节点
-sssingbox node rm <id/端口/名字>
-sssingbox node on|off <id/端口/名字>
-sssingbox status        # 面板状态
-sssingbox sub           # 订阅链接
-sssingbox core list     # 内核现状：装没装、什么版本、有没有更新
-sssingbox core install sing-box   # 装内核，没装就是安装，装了就是更新到最新版
-sssingbox admin reset   # 重置管理员密码
+sssingbox
 ```
 
-装完就能用 `sssingbox` 命令（安装器已写好 CLI 凭证）；面板里改过账号或密码后跑 `sssingbox login` 重新保存。
+菜单里有：创建节点、节点列表、删除节点、启用/停用节点、面板状态、订阅链接、安装/更新内核、查看登录信息、修改登录账号、修改登录密码、修改面板端口、重置管理员密码。
+
+装完就能用（安装器已写好 CLI 凭证）；面板里改账号密码后 CLI 凭证由面板同步更新。
 
 ## 卸载
 

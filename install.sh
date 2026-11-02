@@ -185,7 +185,7 @@ if [ "$SETUP_OK" = "1" ]; then
 else
 	echo "面板账号：沿用旧账号（CLI 凭证没动过的话，sssingbox 命令仍可用；改过密码请跑 sssingbox login）"
 fi
-echo "SSH 管理：sssingbox menu（交互菜单，不用打开面板就能建节点）"
+echo "SSH 管理：sssingbox（直接进菜单，不用打开面板就能管节点、改账号密码端口）"
 echo "卸载：curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh | bash -s uninstall（数据目录保留）"
 echo "=============================================="
 

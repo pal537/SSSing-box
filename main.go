@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,11 @@ import (
 var webFS embed.FS
 
 func main() {
+	// 不带参数时：在终端里直接进交互菜单（sssingbox = sssingbox menu）；
+	// 非终端（systemd、脚本、管道）仍按老样子起面板，不抢服务启动。
+	if len(os.Args) == 1 && stdinIsTerminal() {
+		os.Exit(cli.Run([]string{"menu"}))
+	}
 	// CLI 子命令（sssingbox menu / node / status / sub / login / admin / version）：
 	// 第一个参数是不带 - 的子命令名时走 CLI，不启动面板。
 	if len(os.Args) > 1 {
@@ -105,6 +111,21 @@ func main() {
 		fmt.Println("停止超时，强制退出")
 	}
 	srv.Shutdown()
+}
+
+// stdinIsTerminal：stdin 是不是真终端。管道、重定向、文件都不是；
+// 字符设备里只有 pts/tty 是真终端，/dev/null（systemd 默认 stdin）不是，
+// 这样裸命令在 systemd 下仍起面板，不会误进菜单。
+func stdinIsTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	if fi.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	name := os.Stdin.Name()
+	return strings.HasPrefix(name, "/dev/pts/") || strings.HasPrefix(name, "/dev/tty")
 }
 
 func fatal(err error) {

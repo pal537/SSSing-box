@@ -1,14 +1,18 @@
 package cli
 
-// 交互菜单：SSH 里跑 `sssingbox menu`，不用打开面板就能建节点、管节点。
+// 交互菜单：SSH 里直接跑 `sssingbox` 就进菜单，不用打开面板就能建节点、
+// 管节点、装内核、看状态订阅登录信息、改账号密码端口、重置管理员。
 
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var stdin = bufio.NewReader(os.Stdin)
@@ -64,6 +68,10 @@ func runMenu(o options) int {
 		fmt.Println("6. 订阅链接")
 		fmt.Println("7. 安装/更新内核")
 		fmt.Println("8. 查看登录信息")
+		fmt.Println("9. 修改登录账号")
+		fmt.Println("10. 修改登录密码")
+		fmt.Println("11. 修改面板端口")
+		fmt.Println("12. 重置管理员密码")
 		fmt.Println("0. 退出")
 		switch prompt("请选择：") {
 		case "1":
@@ -82,6 +90,14 @@ func runMenu(o options) int {
 			menuCore(c)
 		case "8":
 			menuLogin(c)
+		case "9":
+			menuChangeUsername(c)
+		case "10":
+			menuChangePassword(c)
+		case "11":
+			c = menuChangePort(c, o)
+		case "12":
+			menuAdminResetItem(c, o)
 		case "0":
 			return 0
 		default:
@@ -274,6 +290,174 @@ func menuLogin(c *client) {
 	}
 	fmt.Printf("面板地址：http://%v:%v/\n账号：%s\n密码：%s\n",
 		st["public_ip"], st["panel_port"], c.username, c.password)
+}
+
+// menuChangeUsername：菜单里改登录账号。面板接口只认会话、不问旧账号，
+// 改完当前会话跟上新账号，CLI 凭证文件面板侧已同步更新。
+func menuChangeUsername(c *client) {
+	fmt.Printf("当前账号：%s\n", c.username)
+	v := prompt("新账号：")
+	if v == "" || strings.ContainsAny(v, " \t\n") || len(v) > 32 {
+		fmt.Println("新账号不能为空、不能含空格、不能超 32 位")
+		return
+	}
+	data, err := c.call("POST", "/api/settings/username", map[string]interface{}{"new": v})
+	if err != nil {
+		fmt.Println("修改失败：", err)
+		return
+	}
+	if name, _ := data["username"].(string); name != "" {
+		c.username = name
+	} else {
+		c.username = v
+	}
+	fmt.Printf("账号已改为 %s，立即生效\n", c.username)
+}
+
+// menuChangePassword：菜单里改登录密码。只填两遍新密码，不问旧密码；
+// 改完当前会话保留，其他会话被吊销，CLI 凭证文件面板侧已同步更新。
+func menuChangePassword(c *client) {
+	p1 := readPassword("新密码：")
+	p2 := readPassword("再输一次：")
+	if p1 == "" || p1 != p2 {
+		fmt.Println("两次密码不一致或为空")
+		return
+	}
+	if len(p1) < 6 {
+		fmt.Println("新密码至少 6 位")
+		return
+	}
+	if _, err := c.call("POST", "/api/settings/password", map[string]interface{}{"new": p1, "new2": p2}); err != nil {
+		fmt.Println("修改失败：", err)
+		return
+	}
+	c.password = p1
+	fmt.Println("密码已修改，立即生效")
+}
+
+var servicePortRe = regexp.MustCompile(`-port\s+\d+`)
+
+// rewriteServicePort：只改服务文件 ExecStart 行里的 -port 数字，其他行原样。
+func rewriteServicePort(content string, newPort int) (string, error) {
+	lines := strings.Split(content, "\n")
+	changed := false
+	for i, ln := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(ln), "ExecStart=") {
+			continue
+		}
+		if !servicePortRe.MatchString(ln) {
+			continue
+		}
+		lines[i] = servicePortRe.ReplaceAllString(ln, "-port "+strconv.Itoa(newPort))
+		changed = true
+	}
+	if !changed {
+		return "", fmt.Errorf("服务文件里没找到 -port 参数")
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// portAvailable：该 TCP 端口能不能绑（绑上立刻放掉，只探不占）。
+func portAvailable(port int) bool {
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
+
+const serviceFilePath = "/etc/systemd/system/sssingbox.service"
+
+// menuChangePort：菜单里改面板端口。改服务文件、重载、重启面板、放行防火墙，
+// 再用新端口重新登录，菜单不断线。失败或非 systemd 安装时原样返回旧客户端。
+func menuChangePort(c *client, o options) *client {
+	fmt.Printf("当前面板端口：%d\n", o.port)
+	n := promptInt("新端口（0 取消）：", 0)
+	if n == 0 {
+		fmt.Println("已取消")
+		return c
+	}
+	if n < 1 || n > 65535 {
+		fmt.Println("端口范围 1-65535")
+		return c
+	}
+	if n == o.port {
+		fmt.Println("和当前端口一样，不用改")
+		return c
+	}
+	if !portAvailable(n) {
+		fmt.Printf("端口 %d 已被占用，换一个\n", n)
+		return c
+	}
+	b, err := os.ReadFile(serviceFilePath)
+	if err != nil {
+		fmt.Println("没找到 systemd 服务文件（手动部署？），改端口请改启动参数后重启面板")
+		return c
+	}
+	updated, err := rewriteServicePort(string(b), n)
+	if err != nil {
+		fmt.Println("修改失败：", err)
+		return c
+	}
+	mode := os.FileMode(0644)
+	if fi, err := os.Stat(serviceFilePath); err == nil {
+		mode = fi.Mode()
+	}
+	if err := os.WriteFile(serviceFilePath, []byte(updated), mode); err != nil {
+		fmt.Println("写服务文件失败：", err)
+		return c
+	}
+	if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+		fmt.Printf("daemon-reload 失败（%v）：%s\n服务文件已改，面板下次重启生效\n", err, strings.TrimSpace(string(out)))
+		return c
+	}
+	if out, err := exec.Command("systemctl", "restart", "sssingbox").CombinedOutput(); err != nil {
+		fmt.Printf("面板重启失败（%v）：%s\n服务文件已改，请手动 systemctl restart sssingbox\n", err, strings.TrimSpace(string(out)))
+		return c
+	}
+	// 防火墙放行新端口（尽力而为，失败不中断）。
+	if _, err := exec.LookPath("ufw"); err == nil {
+		_ = exec.Command("ufw", "allow", strconv.Itoa(n)+"/tcp").Run()
+	}
+	if _, err := exec.LookPath("firewall-cmd"); err == nil {
+		_ = exec.Command("firewall-cmd", "--permanent", "--add-port="+strconv.Itoa(n)+"/tcp").Run()
+		_ = exec.Command("firewall-cmd", "--reload").Run()
+	}
+	// 等新端口起来再重连，最多 30 秒。
+	up := false
+	for i := 0; i < 30; i++ {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(n), 2*time.Second)
+		if err == nil {
+			conn.Close()
+			up = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if !up {
+		fmt.Printf("面板端口已改为 %d，但 30 秒还没探到新端口，请手动确认服务状态\n", n)
+		return c
+	}
+	nc, err := newClient(options{dataDir: o.dataDir, port: n})
+	if err != nil {
+		fmt.Printf("面板端口已改为 %d，但菜单重连失败（%v），请退出后重进菜单\n", n, err)
+		return c
+	}
+	fmt.Printf("面板端口已改为 %d，菜单已切到新端口\n", n)
+	return nc
+}
+
+// menuAdminResetItem：菜单里重置管理员密码（忘密码时用）。直接写库，
+// 不走面板会话；成功后菜单登录信息同步成新的那份。
+func menuAdminResetItem(c *client, o options) {
+	if rc := runAdminReset(o); rc != 0 {
+		return
+	}
+	if cred, err := loadCredentials(o.dataDir); err == nil {
+		c.username = cred.Username
+		c.password = cred.Password
+	}
 }
 
 var protocols = []struct {

@@ -5,7 +5,8 @@ package cli
 // 不存在双写冲突。面板没运行时，节点类命令会报错并提示先启动面板。
 //
 // 凭证：安装器把生成的账号写进 <数据目录>/.cli-credentials（0600，仅 root 可读），
-// CLI 读它登录；面板里改过密码后，用 `sssingbox login` 重新保存一次即可。
+// CLI 读它登录；面板里改账号密码后凭证文件由面板同步更新，丢了或过期时
+// 才需要跑 `sssingbox login` 重新保存。
 
 import (
 	"bytes"
@@ -214,7 +215,7 @@ func createPayload(protocol string, port int, name, sni string, advanced map[str
 // Run：argv[0] 是子命令。返回进程退出码。
 func Run(args []string) int {
 	if len(args) == 0 {
-		fmt.Println("用法：sssingbox menu | sssingbox node list|add|rm|on|off | sssingbox core list|install | sssingbox status | sssingbox sub | sssingbox login | sssingbox admin reset | sssingbox version")
+		fmt.Println("用法：直接运行 sssingbox 进入交互菜单（节点、内核、面板信息、账号密码端口都在里面）。旧子命令仍可用：menu / node / status / sub / core / admin / login / version")
 		return 2
 	}
 	// 子命令后的 flag（如 sssingbox node add -protocol vless）由各子命令自己再解析，
@@ -264,7 +265,7 @@ func Run(args []string) int {
 		fmt.Printf("sssingbox %s\n", version.Version)
 		return 0
 	default:
-		fmt.Printf("未知子命令：%s\n用法：sssingbox menu | sssingbox node list|add|rm|on|off | sssingbox core list|install | sssingbox status | sssingbox sub | sssingbox login | sssingbox admin reset | sssingbox version\n", args[0])
+		fmt.Printf("未知子命令：%s\n用法：直接运行 sssingbox 进入交互菜单。旧子命令仍可用：menu / node / status / sub / core / admin / login / version\n", args[0])
 		return 2
 	}
 }
