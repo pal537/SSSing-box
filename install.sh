@@ -200,9 +200,14 @@ if [ "$SETUP_OK" = "1" ] && [ -r /dev/tty ]; then
 		while true; do
 			echo ""
 			echo "是否修改登录账号/密码？（当前账号：$USER_NAME）"
-			echo "  1) 修改账号  2) 修改密码  3) 结束安装"
-			printf "请选择 [1/2/3]："
+			echo "  1) 修改账号  2) 修改密码  3) 退出"
+			printf "请选择 [1/2/3]（直接回车=退出）："
 			read -r CHOICE < /dev/tty || CHOICE="3"
+			# 输错只重问一行，不重打整块菜单；空回车直接退出（装完误碰回车不再跳第二次）。
+			while [ "$CHOICE" != "1" ] && [ "$CHOICE" != "2" ] && [ "$CHOICE" != "3" ] && [ -n "$CHOICE" ]; do
+				printf "请输入 1、2 或 3（直接回车=退出）："
+				read -r CHOICE < /dev/tty || CHOICE="3"
+			done
 			case "$CHOICE" in
 			1)
 				printf "新账号："
@@ -233,8 +238,7 @@ if [ "$SETUP_OK" = "1" ] && [ -r /dev/tty ]; then
 					echo "修改失败"
 				fi
 				;;
-			3) break ;;
-			*) echo "请输入 1、2 或 3" ;;
+			*) break ;;
 			esac
 		done
 		echo ""
