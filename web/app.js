@@ -1335,7 +1335,7 @@ async function checkUpdate(auto){
   if (btn) btn.disabled = true;
   if (!auto) msg.textContent = '正在检查…';
   try {
-    const r = await api('/api/update/check', 'POST', {});
+    const r = await api('/api/update/check', 'POST', { force: !auto });
     if ($('updCur')) $('updCur').value = r.current || '';
     if ($('updLatest')) $('updLatest').value = r.latest || '未查到';
     if ($('updChecked')) $('updChecked').value = r.checked_at || '';

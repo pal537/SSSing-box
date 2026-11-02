@@ -100,6 +100,9 @@ type ghRelease struct {
 	} `json:"assets"`
 }
 
+// githubAPIBase：GitHub API 根地址，测试时可指到本地 httptest 服务。
+var githubAPIBase = "https://api.github.com"
+
 func ListReleases(repo string) ([]Release, error) {
 	relCacheMu.Lock()
 	if c, ok := relCache[repo]; ok && time.Since(c.at) < time.Hour {
@@ -107,8 +110,13 @@ func ListReleases(repo string) ([]Release, error) {
 		return c.rs, nil
 	}
 	relCacheMu.Unlock()
+	return ListReleasesFresh(repo)
+}
 
-	url := "https://api.github.com/repos/" + repo + "/releases?per_page=30"
+// ListReleasesFresh 不读缓存，直接拉取并刷新缓存。手动“检查更新”和
+// “更新到最新版”必须走它，否则 1 小时缓存会让刚发的新版查不到。
+func ListReleasesFresh(repo string) ([]Release, error) {
+	url := githubAPIBase + "/repos/" + repo + "/releases?per_page=30"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "sssingbox-panel")
 	req.Header.Set("Accept", "application/vnd.github+json")

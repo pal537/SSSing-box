@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,7 +47,7 @@ func (s *Server) startPanelUpdateChecker() {
 	go func() {
 		time.Sleep(5 * time.Minute)
 		for {
-			_, _ = s.checkPanelUpdate()
+		_, _ = s.checkPanelUpdate(false)
 			time.Sleep(12 * time.Hour)
 		}
 	}()
@@ -55,8 +56,15 @@ func (s *Server) startPanelUpdateChecker() {
 func normTag(t string) string { return strings.TrimPrefix(t, "v") }
 
 // checkPanelUpdate 查面板最新版，存进 settings，返回最新 tag。
-func (s *Server) checkPanelUpdate() (string, error) {
-	rels, err := cores.ListReleases(cores.PanelRepo)
+// force=true 时不读 1 小时缓存（手动点“检查更新”必须强制刷新，
+// 否则面板启动后一小时内发的新版永远查不到）；自动检查走缓存，
+// 免得每次打开设置页都打 GitHub API。
+func (s *Server) checkPanelUpdate(force bool) (string, error) {
+	list := cores.ListReleases
+	if force {
+		list = cores.ListReleasesFresh
+	}
+	rels, err := list(cores.PanelRepo)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +85,13 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 405, "method")
 		return
 	}
-	latest, err := s.checkPanelUpdate()
+	// 手动点“检查更新”带 force=true，强制刷新；打开设置页的自动检查不带，
+	// 走 1 小时缓存。请求体解析失败时按不强制处理，别让旧前端报错。
+	var body struct {
+		Force bool `json:"force"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	latest, err := s.checkPanelUpdate(body.Force)
 	if err != nil {
 		// 查不到就回落到上次存的值，别直接报错让设置页空着。
 		latest = s.app.Store.GetSetting("panel_latest")
@@ -114,7 +128,8 @@ func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 400, "开发版不走在线更新，请用安装器重装")
 		return
 	}
-	latest, err := s.checkPanelUpdate()
+	// 更新必须装真正的最新版，不能吃缓存。
+	latest, err := s.checkPanelUpdate(true)
 	if err != nil {
 		errJSON(w, 500, "检查最新版失败："+err.Error())
 		return
@@ -128,7 +143,7 @@ func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	asset := "sssingbox-linux-" + runtime.GOARCH + ".tar.gz"
-	rels, err := cores.ListReleases(cores.PanelRepo)
+	rels, err := cores.ListReleasesFresh(cores.PanelRepo)
 	if err != nil {
 		errJSON(w, 500, "获取 Release 失败："+err.Error())
 		return
