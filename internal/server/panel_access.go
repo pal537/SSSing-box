@@ -113,16 +113,6 @@ func validPanelPath(p string) bool {
 	return true
 }
 
-func validPanelDomain(d string) bool {
-	if d == "" {
-		return true
-	}
-	if strings.Contains(d, "://") || strings.Contains(d, "/") || strings.Contains(d, " ") || len(d) > 253 {
-		return false
-	}
-	return validSNI(d)
-}
-
 // rewriteServicePort：只改服务文件 ExecStart 行里的 -port 数字，其他行原样。
 func rewriteServicePort(content string, newPort int) (string, error) {
 	lines := strings.Split(content, "\n")

@@ -2834,7 +2834,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	okJSON(w, map[string]interface{}{
 		"panel_port":   s.app.Store.GetSetting("panel_port"),
 		"panel_path":   s.app.Store.GetSetting("panel_path"),
-		"panel_domain": s.app.Store.GetSetting("panel_domain"),
 		"public_ip":    s.app.PublicIP(),
 		"public_ipv6":  s.app.PublicIPv6(),
 		"sub_token":    tok,
@@ -3116,26 +3115,6 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.app.Store.SetSetting("panel_path", path)
 		okJSON(w, map[string]interface{}{"panel_path": path})
-	case "panel-domain":
-		// 设置页改面板域名：只决定订阅链接用哪个 host，不改面板本身监听。
-		if r.Method != "POST" {
-			errJSON(w, 405, "method")
-			return
-		}
-		var body struct {
-			Domain string `json:"domain"`
-		}
-		if err := s.readJSON(r, &body); err != nil {
-			errJSON(w, 400, "请求格式不对")
-			return
-		}
-		domain := strings.TrimSpace(body.Domain)
-		if !validPanelDomain(domain) {
-			errJSON(w, 400, "域名格式不对")
-			return
-		}
-		_ = s.app.Store.SetSetting("panel_domain", domain)
-		okJSON(w, map[string]interface{}{"panel_domain": domain})
 	case "sub-token":
 		if r.Method != "POST" {
 			errJSON(w, 405, "method")

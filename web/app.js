@@ -1329,10 +1329,9 @@ async function loadSettings(){
   } catch(e){}
   try {
     const s = await api('/api/settings');
-    ACC_LOADED = { port: s.panel_port || '', path: s.panel_path || '', domain: s.panel_domain || '' };
+    ACC_LOADED = { port: s.panel_port || '', path: s.panel_path || '' };
     if ($('accPort')) $('accPort').value = ACC_LOADED.port;
     if ($('accPath')) $('accPath').value = ACC_LOADED.path;
-    if ($('accDomain')) $('accDomain').value = ACC_LOADED.domain;
   } catch(e){}
   try {
     const t = await api('/api/settings/2fa/status');
@@ -1343,10 +1342,9 @@ async function loadSettings(){
   checkUpdate(true);
 }
 async function savePanelAccess(){
-  const port = parseInt($('accPort').value, 10), path = $('accPath').value.trim(), domain = $('accDomain').value.trim();
+  const port = parseInt($('accPort').value, 10), path = $('accPath').value.trim();
   const msg = $('accMsg'); msg.className = 'hint'; msg.textContent = '正在保存…';
   try {
-    if (domain !== ACC_LOADED.domain) await api('/api/settings/panel-domain', 'POST', { domain });
     const pathChanged = path !== ACC_LOADED.path;
     if (pathChanged) await api('/api/settings/panel-path', 'POST', { path });
     let portChanged = false, restartRequired = false, newPort = 0;
@@ -1370,7 +1368,7 @@ async function savePanelAccess(){
       msg.className = 'hint'; msg.textContent = '已保存，立即生效';
       toast('已保存');
     }
-    ACC_LOADED = { port: portChanged ? newPort : ACC_LOADED.port, path, domain };
+    ACC_LOADED = { port: portChanged ? newPort : ACC_LOADED.port, path };
   } catch(e){ msg.className = 'hint'; msg.textContent = ''; toast(e.message, true); }
 }
 async function open2faBegin(){
@@ -1644,12 +1642,10 @@ async function pollAcmeStatus(){
     }
   } catch(e){ el.textContent = '状态查询失败：' + e.message; }
 }
-let PANEL_DOMAIN = '', PANEL_HTTPS = false;
-// 订阅链接 host：面板域名（设置页绑定的）> 证书域名 > 当前访问 host。
-// 绑了域名就一定是域名，不随打开方式变 IP。
+// 订阅链接 host：证书域名（面板域名和证书卡里绑定的）> 当前访问 host。
 function subLinkValue(token){
-  const host = PANEL_DOMAIN || panelCertDomain(PANEL_CERT_ID) || location.hostname;
-  const scheme = (PANEL_DOMAIN && PANEL_HTTPS) ? 'https' : (location.protocol === 'https:' ? 'https' : 'http');
+  const host = panelCertDomain(PANEL_CERT_ID) || location.hostname;
+  const scheme = location.protocol === 'https:' ? 'https' : 'http';
   const port = location.port ? ':' + location.port : '';
   return scheme + '://' + host + port + '/sub/' + token;
 }
@@ -1657,7 +1653,6 @@ async function openSubModal(){
   openModal(`<h4>订阅配置</h4><div class="muted" style="padding:8px 0">正在读取订阅…</div>`);
   try {
     const s = await api('/api/settings');
-    PANEL_DOMAIN = s.panel_domain || ''; PANEL_HTTPS = !!s.panel_https;
     const link = subLinkValue(s.sub_token);
     const excluded = new Set(s.sub_excluded || []);
     const locals = (NODES || []).map(n => `<div class="row"><input type="checkbox" class="sub-check" data-key="in:${n.id}" ${excluded.has('in:' + n.id) ? '' : 'checked'}><div class="grow"><div class="t">${escHtml(n.name)} ${protoBadge(n.protocol)}</div><div class="s">本地节点 · ${n.enabled ? '启用中' : '已停用（停用的节点订阅里也不会出）'}</div></div></div>`).join('');

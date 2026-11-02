@@ -175,24 +175,25 @@
       </div>
       </div>
 
-      <div class="card sub-card">
+      <div class="cols2">
+      <div class="card">
         <h3>面板访问</h3>
         <div class="form-grid">
           <div><label>面板端口</label><input id="accPort" type="number" min="1" max="65535"></div>
-          <div><label>访问路径（根路径防扫）</label><input id="accPath" placeholder="留空回到根目录，如 abc12"></div>
-          <div class="full"><label>面板域名（订阅链接用它，不填则用证书域名或当前访问地址）</label><input id="accDomain" placeholder="如 panel.example.com，留空不绑定"></div>
+          <div><label>访问路径（根路径防扫）</label><input id="accPath" placeholder="留空回到根目录"></div>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" onclick="savePanelAccess()">保存</button><span class="hint" id="accMsg" style="margin:0"></span></div>
-        <div class="hint">改端口后方面板会重启，要用新端口重新登录；改路径立即生效，旧路径马上失效，当前页面会跳到新地址。</div>
+        <div style="margin-top:12px"><button class="btn small" onclick="savePanelAccess()">保存</button> <span class="hint" id="accMsg"></span></div>
+        <div class="hint">改端口后重启，改路径立即生效。</div>
       </div>
 
-      <div class="card sub-card">
+      <div class="card">
         <h3>二次验证（2FA）</h3>
         <div class="form-grid">
           <div class="full"><span id="tfaStatus">正在读取…</span></div>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="tfaOpenBtn" onclick="open2faBegin()">开通 2FA</button><button class="btn ghost small" id="tfaCloseBtn" onclick="open2faDisable()">关闭 2FA</button><span class="hint" id="tfaMsg" style="margin:0"></span></div>
-        <div class="hint">开通后只有新 IP 才要动态码，同 IP 直接登录；恢复码 10 个、一次性，丢了验证器靠它登录；丢了恢复码也丢了验证器时，用 SSH 菜单里的“关闭二次验证”恢复。</div>
+        <div style="margin-top:12px"><button class="btn small" id="tfaOpenBtn" onclick="open2faBegin()">开通 2FA</button> <button class="btn ghost small" id="tfaCloseBtn" onclick="open2faDisable()">关闭 2FA</button></div>
+        <div class="hint">开通后只有新 IP 才要动态码；恢复码 10 个、一次性。</div>
+      </div>
       </div>
 
       <div class="card sub-card">

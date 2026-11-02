@@ -80,12 +80,6 @@ func TestPanelPath_Validation(t *testing.T) {
 			t.Fatalf("路径 %q 应拒绝", p)
 		}
 	}
-	if !validPanelDomain("panel.example.com") || !validPanelDomain("") {
-		t.Fatal("合法域名与留空应通过")
-	}
-	if validPanelDomain("http://panel.example.com") || validPanelDomain("panel.example.com/abc") || validPanelDomain("x y.us") {
-		t.Fatal("带协议、路径、空格的域名应拒绝")
-	}
 }
 
 func TestPanelPath_Random(t *testing.T) {
