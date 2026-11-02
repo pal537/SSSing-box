@@ -2,6 +2,8 @@
 
 单页面代理面板：一个页面管全部节点，基于 sing-box 内核，支持 12 种协议。
 
+**预设最佳配置，一键安装，一键配置，极简。** 节点默认就是最优档位（VLESS + Reality + TCP + xtls-rprx-vision 等），不用一个个参数调；装完就能用，不用再配。
+
 ## 一键安装
 
 ```bash
@@ -22,17 +24,11 @@ curl -fsSL https://raw.githubusercontent.com/pal537/SSSing-box/main/install.sh |
 
 VLESS、Hysteria2、MTProto、VMess、Shadowsocks、SOCKS5、HTTP、Trojan、WireGuard、TUIC、AnyTLS、Naive（含 Reality / WS / H2 / HTTPUpgrade / CF 等搭建方式）。
 
-## 不用面板：SSH 命令行管理
-
-直接运行一个命令就进交互菜单，所有功能都在里面，不用记一堆命令：
+## SSH 菜单
 
 ```bash
 sssingbox
 ```
-
-菜单里有：创建节点、节点列表、删除节点、启用/停用节点、面板状态、订阅链接、安装/更新内核、查看登录信息、修改登录账号、修改登录密码、修改面板端口、重置管理员密码。
-
-装完就能用（安装器已写好 CLI 凭证）；面板里改账号密码后 CLI 凭证由面板同步更新。
 
 ## 卸载
 
@@ -50,4 +46,3 @@ go build -o sssingbox .
 ```
 
 不带版本号编译出来是 dev 版，在线更新会拒绝 dev 版；需要版本号时编译加 `-ldflags "-X sssingbox/internal/version.Version=<标签>"`。
-

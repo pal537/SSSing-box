@@ -175,9 +175,12 @@ if command -v firewall-cmd >/dev/null 2>&1; then firewall-cmd --permanent --add-
 IP="$(curl -s --max-time 5 ifconfig.me || true)"
 if [ -z "$IP" ]; then IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; fi
 if [ -z "$IP" ]; then IP="服务器IP"; fi
+# 新装默认根路径：初始设置接口回包里带 panel_path，地址里带上它。
+PANEL_PATH="$(echo "$SETUP_OUT" | grep -o '"panel_path":"[^"]*"' | cut -d'"' -f4)"
+if [ -n "$PANEL_PATH" ]; then PANEL_URL="http://$IP:$PORT/$PANEL_PATH/"; else PANEL_URL="http://$IP:$PORT/"; fi
 echo ""
 echo "================ SSSing-box安装完成 ================"
-echo "面板地址：http://$IP:$PORT/"
+echo "面板地址：$PANEL_URL"
 if [ "$SETUP_OK" = "1" ]; then
 	echo "面板账号：$USER_NAME"
 	echo "面板密码：$PASS"

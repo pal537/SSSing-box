@@ -72,6 +72,7 @@ func runMenu(o options) int {
 		fmt.Println("10. 修改登录密码")
 		fmt.Println("11. 修改面板端口")
 		fmt.Println("12. 重置管理员密码")
+		fmt.Println("13. 关闭二次验证（2FA）")
 		fmt.Println("0. 退出")
 		switch prompt("请选择：") {
 		case "1":
@@ -98,6 +99,8 @@ func runMenu(o options) int {
 			c = menuChangePort(c, o)
 		case "12":
 			menuAdminResetItem(c, o)
+		case "13":
+			menuDisable2FA(c)
 		case "0":
 			return 0
 		default:
@@ -288,11 +291,35 @@ func menuLogin(c *client) {
 		fmt.Println("错误：", err)
 		return
 	}
-	fmt.Printf("面板地址：http://%v:%v/\n账号：%s\n密码：%s\n",
-		st["public_ip"], st["panel_port"], c.username, c.password)
+	fmt.Printf("面板地址：http://%v:%v/%s\n账号：%s\n密码：%s\n",
+		st["public_ip"], st["panel_port"], panelPathSuffix(st), c.username, c.password)
 }
 
-// menuChangeUsername：菜单里改登录账号。面板接口只认会话、不问旧账号，
+// panelPathSuffix：查看登录信息里打印的路径部分（有路径才带斜杠后缀）。
+func panelPathSuffix(st map[string]interface{}) string {
+	p, _ := st["panel_path"].(string)
+	p = strings.Trim(p, "/ ")
+	if p == "" {
+		return ""
+	}
+	return p + "/"
+}
+
+// menuDisable2FA：菜单里关闭二次验证（丢了验证器时的恢复口）。
+// 走面板的 reset 接口：该接口只认本机回环，菜单本来就连 127.0.0.1，
+// 所以丢了 2FA 也能关——浏览器会话即使被盗也关不掉 2FA。
+func menuDisable2FA(c *client) {
+	v := prompt("确定关闭二次验证（2FA）？关闭后登录不再要动态码 (y/N)：")
+	if v != "y" && v != "Y" {
+		fmt.Println("已取消")
+		return
+	}
+	if _, err := c.call("POST", "/api/settings/2fa/reset", map[string]interface{}{}); err != nil {
+		fmt.Println("关闭失败：", err)
+		return
+	}
+	fmt.Println("二次验证已关闭，现在用账号密码就能登录")
+}
 // 改完当前会话跟上新账号，CLI 凭证文件面板侧已同步更新。
 func menuChangeUsername(c *client) {
 	fmt.Printf("当前账号：%s\n", c.username)

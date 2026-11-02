@@ -17,7 +17,7 @@ function toast(msg, isErr){
 async function api(path, method, body){
   const opt = { method: method || 'GET', headers: {'Content-Type':'application/json'} };
   if (body !== undefined) opt.body = JSON.stringify(body);
-  const r = await fetch(path, opt);
+  const r = await fetch((window.PANEL_BASE || '') + path, opt);
   let j = {};
   try { j = await r.json(); } catch(e){}
   if (r.status === 401){ showLogin(); throw new Error('未登录'); }
@@ -110,6 +110,8 @@ function showSetup(){
   if (POLL){ clearInterval(POLL); POLL = null; }
 }
 function showLogin(){
+  LOGIN_TMP = '';
+  if ($('login2faWrap')) $('login2faWrap').style.display = 'none';
   hideAllAuth();
   $('loginView').style.display = 'flex';
   if (POLL){ clearInterval(POLL); POLL = null; }
@@ -132,10 +134,21 @@ async function doSetup(){
     showApp();
   } catch(e){ $('setupErr').textContent = e.message; }
 }
+let LOGIN_TMP = '';
 async function doLogin(){
   $('loginErr').textContent = '';
+  $('login2faWrap').style.display = 'none';
   try {
-    await api('/api/login', 'POST', { username: $('loginUser').value.trim(), password: $('loginPass').value, remember: $('loginRemember').checked });
+    const r = await api('/api/login', 'POST', { username: $('loginUser').value.trim(), password: $('loginPass').value, remember: $('loginRemember').checked });
+    if (r.need_2fa){ LOGIN_TMP = r.tmp; $('login2faWrap').style.display = ''; $('login2fa').focus(); return; }
+    showApp();
+  } catch(e){ $('loginErr').textContent = e.message; }
+}
+async function doLogin2fa(){
+  $('loginErr').textContent = '';
+  try {
+    await api('/api/login/2fa', 'POST', { tmp: LOGIN_TMP, code: $('login2fa').value.trim() });
+    LOGIN_TMP = ''; $('login2fa').value = '';
     showApp();
   } catch(e){ $('loginErr').textContent = e.message; }
 }
@@ -144,6 +157,7 @@ async function doLogout(){
   showLogin();
 }
 $('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('login2fa').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin2fa(); });
 $('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 $('setupPass2').addEventListener('keydown', e => { if (e.key === 'Enter') doSetup(); });
 
@@ -626,7 +640,7 @@ function openEditNodeModal(id){
     <div class="hint" style="margin:0 0 12px">${escHtml(protoFull(n.protocol, cfg))}</div>
     <div class="form-grid">
       <div><label>节点名</label><input id="eName" value="${escHtml(n.name)}"></div>
-      <div><label>节点地址</label><input id="eAddr" value="${escHtml(n.address)}"></div>
+      <div><label>节点IP</label><input id="eAddr" value="${escHtml(n.address)}"></div>
       <div><label>端口</label><input id="ePort" type="number" value="${n.port}"></div>
       ${noSni ? '' : `<div><label>${sniLabel(n.protocol, cfg.mode)}</label><input id="eSni" value="${escHtml(n.sni)}"></div>`}
     </div>
@@ -805,7 +819,7 @@ function addFormHTML(){
         <input id="fName" placeholder="留空自动生成，如 VLESS-8443">
       </div>
       <div>
-        <label>节点地址</label>
+        <label>节点IP</label>
         <input id="fAddr" placeholder="留空自动取公网 IP">
       </div>
     </div>
@@ -1304,6 +1318,7 @@ function delChain(id, name){
 }
 
 // ---------- settings ----------
+let ACC_LOADED = {};
 async function loadSettings(){
   try {
     await loadPanelCerts();
@@ -1312,7 +1327,101 @@ async function loadSettings(){
     const me = await api('/api/me');
     if ($('curUser')) $('curUser').value = me.username || '';
   } catch(e){}
+  try {
+    const s = await api('/api/settings');
+    ACC_LOADED = { port: s.panel_port || '', path: s.panel_path || '', domain: s.panel_domain || '' };
+    if ($('accPort')) $('accPort').value = ACC_LOADED.port;
+    if ($('accPath')) $('accPath').value = ACC_LOADED.path;
+    if ($('accDomain')) $('accDomain').value = ACC_LOADED.domain;
+  } catch(e){}
+  try {
+    const t = await api('/api/settings/2fa/status');
+    if ($('tfaStatus')) $('tfaStatus').textContent = t.enabled ? ('已开通（剩余恢复码 ' + t.recovery_left + ' 个）') : '未开通';
+    if ($('tfaOpenBtn')) $('tfaOpenBtn').style.display = t.enabled ? 'none' : '';
+    if ($('tfaCloseBtn')) $('tfaCloseBtn').style.display = t.enabled ? '' : 'none';
+  } catch(e){}
   checkUpdate(true);
+}
+async function savePanelAccess(){
+  const port = parseInt($('accPort').value, 10), path = $('accPath').value.trim(), domain = $('accDomain').value.trim();
+  const msg = $('accMsg'); msg.className = 'hint'; msg.textContent = '正在保存…';
+  try {
+    if (domain !== ACC_LOADED.domain) await api('/api/settings/panel-domain', 'POST', { domain });
+    const pathChanged = path !== ACC_LOADED.path;
+    if (pathChanged) await api('/api/settings/panel-path', 'POST', { path });
+    let portChanged = false, restartRequired = false, newPort = 0;
+    if (!isNaN(port) && String(port) !== String(ACC_LOADED.port)){
+      const r = await api('/api/settings/port', 'POST', { port });
+      portChanged = true; restartRequired = !!r.restart_required; newPort = r.port;
+    }
+    const host = location.hostname;
+    if (portChanged){
+      if (restartRequired){
+        msg.className = 'hint'; msg.textContent = '端口已写入服务文件，但面板不会自动重启（手动部署），请手动按新端口重启面板：' + host + ':' + newPort;
+      } else {
+        const pn = location.pathname; const np = (window.PANEL_BASE || '') ? (pn.endsWith('/') ? pn.slice(0, -1) : pn) : '';
+        msg.className = 'hint'; msg.textContent = '端口已改，面板正在重启，重启后请用新地址重新登录：' + location.protocol + '//' + host + ':' + newPort + np + '/';
+      }
+      toast('面板端口已改，正在重启');
+    } else if (pathChanged){
+      const base = path ? '/' + path.split('/').filter(Boolean).join('/') : '';
+      location.href = location.protocol + '//' + host + (location.port ? ':' + location.port : '') + base + '/';
+    } else {
+      msg.className = 'hint'; msg.textContent = '已保存，立即生效';
+      toast('已保存');
+    }
+    ACC_LOADED = { port: portChanged ? newPort : ACC_LOADED.port, path, domain };
+  } catch(e){ msg.className = 'hint'; msg.textContent = ''; toast(e.message, true); }
+}
+async function open2faBegin(){
+  try {
+    const r = await api('/api/settings/2fa/begin', 'POST', {});
+    open2faModal(r);
+  } catch(e){ toast(e.message, true); }
+}
+function open2faModal(r){
+  openModal(`<h4>开通二次验证（2FA）</h4>
+    <div class="muted" style="padding:4px 0 10px">用验证器 App 扫码，或手动输入密钥；然后输入一次动态码，开通后会给出 10 个一次性恢复码（只显示一次），请妥善保存。</div>
+    <div style="text-align:center"><img src="${r.qr}" style="width:180px;height:180px;border:1px solid #e5e7eb;border-radius:12px"></div>
+    <label>手动密钥（可复制）</label><div class="input-row"><input id="tfaSecret" readonly value="${escHtml(r.secret)}"><button class="btn ghost small" onclick="copyText('tfaSecret')">复制</button><button class="btn ghost small" onclick="regen2faSecret()">换一个</button></div>
+    <div class="hint">每次打开与每次刷新都会重新随机生成，不是固定默认值。</div>
+    <label>动态码</label><input id="tfaCode" inputmode="numeric" placeholder="6 位动态码">
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">取消</button><button class="btn" onclick="enable2fa()">输入正确后开通</button></div>
+    <div class="msg" id="tfaModalMsg"></div>`);
+}
+async function regen2faSecret(){
+  try {
+    const r = await api('/api/settings/2fa/regenerate', 'POST', {});
+    open2faModal(r);
+  } catch(e){ toast(e.message, true); }
+}
+async function enable2fa(){
+  const code = $('tfaCode').value.trim();
+  if (!code){ $('tfaModalMsg').className = 'msg err'; $('tfaModalMsg').textContent = '请先输入动态码'; return; }
+  try {
+    const r = await api('/api/settings/2fa/enable', 'POST', { code });
+    const codes = (r.recovery || []).join('\n');
+    openModal(`<h4>2FA 已开通</h4>
+      <div class="muted" style="padding:4px 0 10px">下面是 10 个一次性恢复码，<b>只显示这一次</b>，丢了验证器时靠它登录，用一次少一个。请复制保存好再关闭。</div>
+      <textarea id="tfaRecovery" readonly rows="11" style="width:100%;font-family:monospace">${escHtml(codes)}</textarea>
+      <div class="foot"><button class="btn ghost" onclick="copyText('tfaRecovery')">复制全部</button><button class="btn" onclick="closeModal();loadSettings()">我已保存好</button></div>`);
+    toast('2FA 已开通');
+  } catch(e){ $('tfaModalMsg').className = 'msg err'; $('tfaModalMsg').textContent = e.message; }
+}
+function open2faDisable(){
+  openModal(`<h4>关闭二次验证（2FA）</h4>
+    <div class="muted" style="padding:4px 0 10px">关闭后登录不再要动态码，恢复码同时作废。请输入一次当前动态码（或任意一个未用的恢复码）确认。</div>
+    <label>动态码或恢复码</label><input id="tfaOffCode" placeholder="6 位动态码或 XXXX-XXXX 恢复码">
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">取消</button><button class="btn" onclick="disable2fa()">确认关闭</button></div>
+    <div class="msg" id="tfaOffMsg"></div>`);
+}
+async function disable2fa(){
+  const code = $('tfaOffCode').value.trim();
+  if (!code){ $('tfaOffMsg').className = 'msg err'; $('tfaOffMsg').textContent = '请先输入动态码或恢复码'; return; }
+  try {
+    await api('/api/settings/2fa/disable', 'POST', { code });
+    closeModal(); loadSettings(); toast('2FA 已关闭');
+  } catch(e){ $('tfaOffMsg').className = 'msg err'; $('tfaOffMsg').textContent = e.message; }
 }
 async function saveLogin(){
   const u = $('newUser').value.trim(), p = $('pwNew').value;
@@ -1535,9 +1644,12 @@ async function pollAcmeStatus(){
     }
   } catch(e){ el.textContent = '状态查询失败：' + e.message; }
 }
-async function subLinkValue(token){
-  const scheme = location.protocol === 'https:' ? 'https' : 'http';
-  const host = panelCertDomain(PANEL_CERT_ID) || location.hostname;
+let PANEL_DOMAIN = '', PANEL_HTTPS = false;
+// 订阅链接 host：面板域名（设置页绑定的）> 证书域名 > 当前访问 host。
+// 绑了域名就一定是域名，不随打开方式变 IP。
+function subLinkValue(token){
+  const host = PANEL_DOMAIN || panelCertDomain(PANEL_CERT_ID) || location.hostname;
+  const scheme = (PANEL_DOMAIN && PANEL_HTTPS) ? 'https' : (location.protocol === 'https:' ? 'https' : 'http');
   const port = location.port ? ':' + location.port : '';
   return scheme + '://' + host + port + '/sub/' + token;
 }
@@ -1545,6 +1657,7 @@ async function openSubModal(){
   openModal(`<h4>订阅配置</h4><div class="muted" style="padding:8px 0">正在读取订阅…</div>`);
   try {
     const s = await api('/api/settings');
+    PANEL_DOMAIN = s.panel_domain || ''; PANEL_HTTPS = !!s.panel_https;
     const link = subLinkValue(s.sub_token);
     const excluded = new Set(s.sub_excluded || []);
     const locals = (NODES || []).map(n => `<div class="row"><input type="checkbox" class="sub-check" data-key="in:${n.id}" ${excluded.has('in:' + n.id) ? '' : 'checked'}><div class="grow"><div class="t">${escHtml(n.name)} ${protoBadge(n.protocol)}</div><div class="s">本地节点 · ${n.enabled ? '启用中' : '已停用（停用的节点订阅里也不会出）'}</div></div></div>`).join('');

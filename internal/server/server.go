@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
@@ -56,6 +57,9 @@ type Server struct {
 	// 在线更新进度（update.go）：downloading/installing/restarting，空=闲置。
 	updMu    sync.Mutex
 	updPhase string
+	// 2FA 登录第二步的临时凭证（totp.go）：128 位随机 token，5 分钟有效。
+	totpTmpMu sync.Mutex
+	totpTmp   map[string]totpChallenge
 	// 面板域名证书（panelcert.go）：数据目录 certs/panel/。
 	certs *panelCertManager
 	// Serve 循环与监听重启：启用 HTTPS / 换证 / 续期时重启监听。
@@ -208,6 +212,7 @@ func (s *Server) Routes() http.Handler {
 	})
 	// auth (public)
 	mux.HandleFunc("/api/login", s.handleLogin)
+	mux.HandleFunc("/api/login/2fa", s.handleLogin2FA)
 	mux.HandleFunc("/api/logout", s.handleLogout)
 	mux.HandleFunc("/api/me", s.handleMe)
 	mux.HandleFunc("/api/setup-status", s.handleSetupStatus)
@@ -240,7 +245,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/chains/", auth(s.mutating(s.handleChainAction)))
 	mux.HandleFunc("/api/settings", auth(s.mutating(s.handleSettings)))
 	mux.HandleFunc("/api/settings/", auth(s.mutating(s.handleSettingsAction)))
-	return mux
+	mux.HandleFunc("/api/settings/2fa/status", auth(s.handle2FAStatus))
+	mux.HandleFunc("/api/settings/2fa/begin", auth(s.mutating(s.handle2FABegin)))
+	mux.HandleFunc("/api/settings/2fa/regenerate", auth(s.mutating(s.handle2FARegenerate)))
+	mux.HandleFunc("/api/settings/2fa/enable", auth(s.mutating(s.handle2FAEnable)))
+	mux.HandleFunc("/api/settings/2fa/disable", auth(s.mutating(s.handle2FADisable)))
+	mux.HandleFunc("/api/settings/2fa/reset", auth(s.mutating(s.handle2FAReset)))
+	return s.panelPathGate(mux)
 }
 
 func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, name string) {
@@ -266,6 +277,20 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, name string) 
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	case strings.HasSuffix(name, ".css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case strings.HasSuffix(name, ".svg"):
+		w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	}
+	// 首页注入当前根路径前缀：前端拼静态地址和 API 地址都靠它；
+	// 根目录模式下替换为空串，页面行为与以前完全一致。
+	if name == "index.html" {
+		b, err := io.ReadAll(f)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		b = bytes.ReplaceAll(b, []byte("__PANEL_BASE__"), []byte(s.panelBase()))
+		w.Write(b)
+		return
 	}
 	rs, ok := f.(io.ReadSeeker)
 	if !ok {
@@ -296,6 +321,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 401, "账号或密码不对")
 		return
 	}
+	// 2FA 第二步：已开通、本机回环之外、且该 IP 没验证过时，不直接发会话，
+	// 只给一个 5 分钟有效的临时凭证，前端凭它再交一次动态码。
+	// 记住登录的时长选择也带进临时凭证，第二步建会话时再兑现。
+	if s.app.Store.GetSetting("totp_secret") != "" && !isLoopbackIP(clientIPOf(r)) && !s.totpIPVerified(clientIPOf(r)) {
+		tmp := randToken()
+		s.totpChallengePut(tmp, totpChallenge{username: body.Username, remember: body.Remember, exp: time.Now().Add(5 * time.Minute)})
+		okJSON(w, map[string]interface{}{"need_2fa": true, "tmp": tmp})
+		return
+	}
 	// 记住登录：会话与 cookie 一起延长到 30 天（不绑 IP：出口 IP 会变，
 	// 绑 IP 反而把人踢下线）；不勾则保持 24 小时。
 	exp := time.Now().Add(24 * time.Hour)
@@ -310,6 +344,55 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.sessMu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
 	okJSON(w, map[string]interface{}{"username": body.Username})
+}
+
+// handleLogin2FA：登录第二步。凭第一步的临时凭证 + 动态码（或恢复码）
+// 换正式会话；动态码对不上不吊销临时凭证（5 次输错才作废，防手抖），
+// 恢复码命中即作废（一次性）。成功后该 IP 记为已验证，下次直接登录。
+func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		errJSON(w, 405, "method")
+		return
+	}
+	var body struct {
+		Tmp  string `json:"tmp"`
+		Code string `json:"code"`
+	}
+	if err := s.readJSON(r, &body); err != nil || body.Tmp == "" || body.Code == "" {
+		errJSON(w, 400, "请求格式不对")
+		return
+	}
+	ch, ok := s.totpChallengeTake(body.Tmp)
+	if !ok {
+		errJSON(w, 401, "验证已过期，请重新登录")
+		return
+	}
+	secret := s.app.Store.GetSetting("totp_secret")
+	passed := false
+	if secret != "" && verifyTOTP(secret, body.Code, time.Now()) {
+		passed = true
+	} else if s.tryRecoveryCode(body.Code) {
+		passed = true
+	}
+	if !passed {
+		s.totpChallengeFail(body.Tmp)
+		errJSON(w, 401, "动态码不对")
+		return
+	}
+	s.totpChallengeDone(body.Tmp)
+	exp := time.Now().Add(24 * time.Hour)
+	maxAge := 86400
+	if ch.remember {
+		exp = time.Now().Add(30 * 24 * time.Hour)
+		maxAge = 30 * 86400
+	}
+	tok := randToken()
+	s.sessMu.Lock()
+	s.sessions[tok] = session{username: ch.username, exp: exp}
+	s.sessMu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: "sssingbox_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
+	s.totpMarkIP(clientIPOf(r))
+	okJSON(w, map[string]interface{}{"username": ch.username})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -383,8 +466,14 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 500, err.Error())
 		return
 	}
+	// 新装默认根路径：初始设置时才生成（只跑这一次），老面板升级不受影响。
+	panelPath := s.app.Store.GetSetting("panel_path")
+	if panelPath == "" {
+		panelPath = randPanelPath()
+		_ = s.app.Store.SetSetting("panel_path", panelPath)
+	}
 	s.setSession(w, body.Username)
-	okJSON(w, map[string]interface{}{"username": body.Username})
+	okJSON(w, map[string]interface{}{"username": body.Username, "panel_path": panelPath})
 }
 
 // effectiveAddress：节点链接/订阅用的 host。当前选用证书的首域名就是面板域名，
@@ -1082,6 +1171,15 @@ func (s *Server) handleInbounds(w http.ResponseWriter, r *http.Request) {
 			errJSON(w, 400, "伪装域名格式不对：只能是合法域名或 IP，不能含空格、中文或特殊字符")
 			return
 		}
+		if body.SNI != "" && proxy.IsRealityMode(body.Protocol, advancedMode(body.Advanced)) {
+			if blocked, err := proxy.SNIBehindCloudflare(body.SNI); err != nil {
+				errJSON(w, 400, "伪装域名解析失败，无法确认是否套 Cloudflare，请检查域名后重试")
+				return
+			} else if blocked {
+				errJSON(w, 400, "伪装域名套了 Cloudflare，不能用作 Reality 伪装，换一个")
+				return
+			}
+		}
 		if body.QuotaMode == "" {
 			body.QuotaBytes = 0
 		}
@@ -1120,6 +1218,30 @@ func (s *Server) handleInbounds(w http.ResponseWriter, r *http.Request) {
 	default:
 		errJSON(w, 405, "method")
 	}
+}
+
+// advancedMode：创建/编辑节点请求里 advanced.mode（前端传的传输模式）。
+func advancedMode(adv map[string]interface{}) string {
+	if adv == nil {
+		return ""
+	}
+	m, _ := adv["mode"].(string)
+	return m
+}
+
+// configMode：已存节点的传输模式（编辑时 advanced 没传 mode 就用它判断）。
+func configMode(protocol, configJSON string) string {
+	switch protocol {
+	case "vless":
+		var cfg proxy.VLESSConfig
+		_ = json.Unmarshal([]byte(configJSON), &cfg)
+		return cfg.Mode
+	case "trojan":
+		var cfg proxy.TrojanConfig
+		_ = json.Unmarshal([]byte(configJSON), &cfg)
+		return cfg.Mode
+	}
+	return ""
 }
 
 // validSNI：SNI 必须是合法主机名或 IP 字面量。面板以前照单全收，
@@ -1665,6 +1787,23 @@ func (s *Server) handleInboundAction(w http.ResponseWriter, r *http.Request) {
 				errJSON(w, 400, "伪装域名格式不对：只能是合法域名或 IP，不能含空格、中文或特殊字符")
 				return
 			}
+			if body.SNI != nil && *body.SNI != "" {
+				mode := configMode(in.Protocol, in.Config)
+				if body.Advanced != nil {
+					if m, ok := body.Advanced["mode"].(string); ok && m != "" {
+						mode = m
+					}
+				}
+				if proxy.IsRealityMode(in.Protocol, mode) {
+					if blocked, err := proxy.SNIBehindCloudflare(*body.SNI); err != nil {
+						errJSON(w, 400, "伪装域名解析失败，无法确认是否套 Cloudflare，请检查域名后重试")
+						return
+					} else if blocked {
+						errJSON(w, 400, "伪装域名套了 Cloudflare，不能用作 Reality 伪装，换一个")
+						return
+					}
+				}
+			}
 			// PUT 清空名字/地址会留下无名节点或坏链接：创建时空名字会
 			// 自动命名，编辑时清空没有合理语义，直接拒绝。
 			if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
@@ -1672,7 +1811,7 @@ func (s *Server) handleInboundAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if body.Address != nil && strings.TrimSpace(*body.Address) == "" {
-				errJSON(w, 400, "接入地址不能为空")
+				errJSON(w, 400, "节点 IP 不能为空")
 				return
 			}
 			oldSNI := in.SNI
@@ -2135,6 +2274,15 @@ func (s *Server) handleInboundAction(w http.ResponseWriter, r *http.Request) {
 		if body.SNI != "" && !validSNI(body.SNI) {
 			errJSON(w, 400, "伪装域名格式不对：只能是合法域名或 IP，不能含空格、中文或特殊字符")
 			return
+		}
+		if body.SNI != "" && proxy.IsRealityMode(in.Protocol, configMode(in.Protocol, in.Config)) {
+			if blocked, err := proxy.SNIBehindCloudflare(body.SNI); err != nil {
+				errJSON(w, 400, "伪装域名解析失败，无法确认是否套 Cloudflare，请检查域名后重试")
+				return
+			} else if blocked {
+				errJSON(w, 400, "伪装域名套了 Cloudflare，不能用作 Reality 伪装，换一个")
+				return
+			}
 		}
 		oldSNI := in.SNI
 		in.SNI = newSNI
@@ -2685,6 +2833,8 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	okJSON(w, map[string]interface{}{
 		"panel_port":   s.app.Store.GetSetting("panel_port"),
+		"panel_path":   s.app.Store.GetSetting("panel_path"),
+		"panel_domain": s.app.Store.GetSetting("panel_domain"),
 		"public_ip":    s.app.PublicIP(),
 		"public_ipv6":  s.app.PublicIPv6(),
 		"sub_token":    tok,
@@ -2887,6 +3037,105 @@ func (s *Server) handleSettingsAction(w http.ResponseWriter, r *http.Request) {
 			s.revokeSessionsExcept(c.Value)
 		}
 		okJSON(w, map[string]interface{}{"username": newName})
+	case "port":
+		// 设置页改面板端口：改服务文件 + 重载 + 防火墙放行，先回包再重启
+		// （重启在回包 800ms 后做，浏览器才收得到确认）；手动部署没有服务
+		// 文件时只回 restart_required，让用户自己按新端口重启。
+		if r.Method != "POST" {
+			errJSON(w, 405, "method")
+			return
+		}
+		var body struct {
+			Port int `json:"port"`
+		}
+		if err := s.readJSON(r, &body); err != nil {
+			errJSON(w, 400, "请求格式不对")
+			return
+		}
+		if body.Port < 1 || body.Port > 65535 {
+			errJSON(w, 400, "端口范围 1-65535")
+			return
+		}
+		cur := 0
+		if p := s.app.Store.GetSetting("panel_port"); p != "" {
+			cur, _ = strconv.Atoi(p)
+		}
+		if body.Port == cur {
+			okJSON(w, map[string]interface{}{"port": body.Port, "restart_required": false})
+			return
+		}
+		if portTaken(body.Port) {
+			errJSON(w, 400, "端口已被占用")
+			return
+		}
+		b, err := os.ReadFile(panelServiceFile)
+		if err != nil {
+			okJSON(w, map[string]interface{}{"port": body.Port, "restart_required": true})
+			return
+		}
+		updated, err := rewriteServicePort(string(b), body.Port)
+		if err != nil {
+			errJSON(w, 500, err.Error())
+			return
+		}
+		mode := os.FileMode(0644)
+		if fi, err := os.Stat(panelServiceFile); err == nil {
+			mode = fi.Mode()
+		}
+		if err := os.WriteFile(panelServiceFile, []byte(updated), mode); err != nil {
+			errJSON(w, 500, "写服务文件失败："+err.Error())
+			return
+		}
+		if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+			okJSON(w, map[string]interface{}{"port": body.Port, "restart_required": true, "note": "daemon-reload 失败：" + strings.TrimSpace(string(out))})
+			return
+		}
+		firewallAllowPort(body.Port)
+		okJSON(w, map[string]interface{}{"port": body.Port, "restart_required": false})
+		go func() {
+			time.Sleep(800 * time.Millisecond)
+			_ = exec.Command("systemctl", "restart", "sssingbox").Run()
+		}()
+	case "panel-path":
+		// 设置页改根路径：立即生效，不用重启（路径门每次请求都读设置）。
+		if r.Method != "POST" {
+			errJSON(w, 405, "method")
+			return
+		}
+		var body struct {
+			Path string `json:"path"`
+		}
+		if err := s.readJSON(r, &body); err != nil {
+			errJSON(w, 400, "请求格式不对")
+			return
+		}
+		path := strings.Trim(body.Path, "/ ")
+		if !validPanelPath(path) {
+			errJSON(w, 400, "路径只能是 1-32 位英文、数字、-、_，不能用 sub、api，留空回到根目录")
+			return
+		}
+		_ = s.app.Store.SetSetting("panel_path", path)
+		okJSON(w, map[string]interface{}{"panel_path": path})
+	case "panel-domain":
+		// 设置页改面板域名：只决定订阅链接用哪个 host，不改面板本身监听。
+		if r.Method != "POST" {
+			errJSON(w, 405, "method")
+			return
+		}
+		var body struct {
+			Domain string `json:"domain"`
+		}
+		if err := s.readJSON(r, &body); err != nil {
+			errJSON(w, 400, "请求格式不对")
+			return
+		}
+		domain := strings.TrimSpace(body.Domain)
+		if !validPanelDomain(domain) {
+			errJSON(w, 400, "域名格式不对")
+			return
+		}
+		_ = s.app.Store.SetSetting("panel_domain", domain)
+		okJSON(w, map[string]interface{}{"panel_domain": domain})
 	case "sub-token":
 		if r.Method != "POST" {
 			errJSON(w, 405, "method")

@@ -4,14 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SSSing-box · 多协议代理面板</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="__PANEL_BASE__/favicon.svg">
+<link rel="stylesheet" href="__PANEL_BASE__/style.css">
+<script>window.PANEL_BASE = "__PANEL_BASE__";</script>
 </head>
 <body>
 
 <!-- first-run setup -->
 <div id="setupView" class="login-wrap" style="display:none">
   <div class="login-card">
-    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></div>
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 7.5 C17.5 5.8 15.2 4.5 12.5 4.5 C9.8 4.5 7.8 6 7.8 8.2 C7.8 10.6 10.2 11.2 12.5 11.8 C14.8 12.4 17.2 13 17.2 15.4 C17.2 17.9 15 19.5 12.2 19.5 C9.4 19.5 7.4 18.4 7 16.6"/></svg></div>
     <h1>欢迎使用 SSSing-box</h1>
     <p>首次打开，先设置一个管理员账号（用户名已随机生成，可改）</p>
     <div class="field"><label>用户名</label><input id="setupUser" autocomplete="username"></div>
@@ -25,13 +27,17 @@
 <!-- login -->
 <div id="loginView" class="login-wrap" style="display:none">
   <div class="login-card">
-    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></div>
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 7.5 C17.5 5.8 15.2 4.5 12.5 4.5 C9.8 4.5 7.8 6 7.8 8.2 C7.8 10.6 10.2 11.2 12.5 11.8 C14.8 12.4 17.2 13 17.2 15.4 C17.2 17.9 15 19.5 12.2 19.5 C9.4 19.5 7.4 18.4 7 16.6"/></svg></div>
     <h1>SSSing-box</h1>
     <p>多协议代理面板</p>
     <div class="field"><label>账号</label><input id="loginUser" autocomplete="username"></div>
     <div class="field"><label>密码</label><input id="loginPass" type="password" autocomplete="current-password"></div>
     <div class="field"><label><input type="checkbox" id="loginRemember" checked> 记住登录（30 天）</label></div>
     <button class="btn" style="width:100%" onclick="doLogin()">登录</button>
+    <div id="login2faWrap" style="display:none;margin-top:12px">
+      <div class="field"><label>二次验证动态码</label><input id="login2fa" inputmode="numeric" autocomplete="one-time-code" placeholder="验证器里的 6 位码，丢了验证器可填恢复码"></div>
+      <button class="btn" style="width:100%" onclick="doLogin2fa()">验证并登录</button>
+    </div>
     <div class="err" id="loginErr"></div>
   </div>
 </div>
@@ -39,7 +45,7 @@
 <!-- app -->
 <div id="appView" style="display:none">
   <div class="topbar"><div class="topbar-in">
-    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7z" fill="rgba(255,255,255,.18)"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg></span>SSSing-box</div>
+    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 7.5 C17.5 5.8 15.2 4.5 12.5 4.5 C9.8 4.5 7.8 6 7.8 8.2 C7.8 10.6 10.2 11.2 12.5 11.8 C14.8 12.4 17.2 13 17.2 15.4 C17.2 17.9 15 19.5 12.2 19.5 C9.4 19.5 7.4 18.4 7 16.6"/></svg></span>SSSing-box</div>
     <nav class="nav">
       <button data-view="status" class="on" onclick="showView('status')">系统状态</button>
       <button data-view="inbounds" onclick="showView('inbounds')">入站列表</button>
@@ -170,6 +176,26 @@
       </div>
 
       <div class="card sub-card">
+        <h3>面板访问</h3>
+        <div class="form-grid">
+          <div><label>面板端口</label><input id="accPort" type="number" min="1" max="65535"></div>
+          <div><label>访问路径（根路径防扫）</label><input id="accPath" placeholder="留空回到根目录，如 abc12"></div>
+          <div class="full"><label>面板域名（订阅链接用它，不填则用证书域名或当前访问地址）</label><input id="accDomain" placeholder="如 panel.example.com，留空不绑定"></div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" onclick="savePanelAccess()">保存</button><span class="hint" id="accMsg" style="margin:0"></span></div>
+        <div class="hint">改端口后方面板会重启，要用新端口重新登录；改路径立即生效，旧路径马上失效，当前页面会跳到新地址。</div>
+      </div>
+
+      <div class="card sub-card">
+        <h3>二次验证（2FA）</h3>
+        <div class="form-grid">
+          <div class="full"><span id="tfaStatus">正在读取…</span></div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="tfaOpenBtn" onclick="open2faBegin()">开通 2FA</button><button class="btn ghost small" id="tfaCloseBtn" onclick="open2faDisable()">关闭 2FA</button><span class="hint" id="tfaMsg" style="margin:0"></span></div>
+        <div class="hint">开通后只有新 IP 才要动态码，同 IP 直接登录；恢复码 10 个、一次性，丢了验证器靠它登录；丢了恢复码也丢了验证器时，用 SSH 菜单里的“关闭二次验证”恢复。</div>
+      </div>
+
+      <div class="card sub-card">
         <h3>面板域名和证书</h3>
         <div class="form-grid">
           <div class="full"><label>面板的域名和证书：证书域名就是面板域名，节点链接和订阅默认用它。默认 HTTP，选一张证书并启用 HTTPS 才变。</label>
@@ -190,6 +216,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="/app.js"></script>
+<script src="__PANEL_BASE__/app.js"></script>
 </body>
 </html>
